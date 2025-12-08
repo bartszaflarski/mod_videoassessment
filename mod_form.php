@@ -65,8 +65,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $cm = $PAGE->cm;
 
         $mform = $this->_form;
-        $mform->addElement('hidden', 'quickSetupFormUrl', $CFG->wwwroot . '/mod/videoassessment/modedit.php');
-        $mform->setType('quickSetupFormUrl', PARAM_RAW);
         $mform->addElement('header', 'general', get_string('general', 'form'));
 
         $mform->addElement('text', 'name', get_string('videoassessmentname', 'videoassessment'), ['size' => '64']);
@@ -83,7 +81,21 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $mform->setDefault('allowstudentupload', 1);
         $mform->addHelpButton('allowstudentupload', 'allowstudentupload', 'videoassessment');
 
-        $this->add_quick_setup_element();
+        // Video Publishing section.
+        $mform->addElement('header', 'videopublishing', get_string('videopublishing', 'videoassessment'));
+        $mform->setExpanded('videopublishing', true);
+
+        $mform->addElement('advcheckbox', 'allowyoutube', get_string('allowyoutube', 'videoassessment'));
+        $mform->setDefault('allowyoutube', 1);
+        $mform->addHelpButton('allowyoutube', 'allowyoutube', 'videoassessment');
+
+        $mform->addElement('advcheckbox', 'allowvideoupload', get_string('allowvideoupload', 'videoassessment'));
+        $mform->setDefault('allowvideoupload', 1);
+        $mform->addHelpButton('allowvideoupload', 'allowvideoupload', 'videoassessment');
+
+        $mform->addElement('advcheckbox', 'allowvideorecord', get_string('allowvideorecord', 'videoassessment'));
+        $mform->setDefault('allowvideorecord', 1);
+        $mform->addHelpButton('allowvideorecord', 'allowvideorecord', 'videoassessment');
 
         $mform->addElement('header', 'availability', get_string('availability', 'assign'));
         $mform->setExpanded('availability', false);
@@ -122,151 +134,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $mform->addElement('radio', 'class', null, get_string('close', 'videoassessment'), 0);
         $mform->setType('class', PARAM_INT);
         $mform->setDefault('class', 0);
-        $mform->addElement(
-            'select',
-            'peerfairnessbonus',
-            get_string('peerfairnessbonus', 'videoassessment'),
-            [
-                '0' => get_string('no', 'videoassessment'),
-                '1' => get_string('yes', 'videoassessment'),
-            ],
-        );
-        $mform->addHelpButton('peerfairnessbonus', 'peerfairnessbonus', 'videoassessment');
-        $bonuspercentage = [];
-        for ($i = 0; $i <= 100; $i++) {
-            $bonuspercentage[$i] = $i . '%';
-        }
-
-        $mform->addElement(
-            'select',
-            'bonuspercentage',
-            get_string('bonuspercentage', 'videoassessment') . '<br>(' . get_string('ontopoftotal', 'videoassessment') . ')',
-            $bonuspercentage,
-        );
-        $mform->setDefault('bonuspercentage', 10);
-        for ($i = 1; $i <= 6; $i++) {
-            $bonusscoregroup[$i][] = $mform->createElement(
-                'static',
-                '',
-                null,
-                '<span class="form-check-inline fitem" style="width: auto;">' . get_string('within', 'videoassessment') . '</span>',
-            );
-            $bonusscoregroup[$i][] = $mform->createElement('select', 'bonusscale' . $i, "", $bonuspercentage);
-            $bonusscoregroup[$i][] = $mform->createElement(
-                'static',
-                '',
-                null,
-                '<span class="form-check-inline fitem" style="width: auto;">'
-                . get_string('ofteacherscore', 'videoassessment') . '</span>',
-            );
-            $bonusscoregroup[$i][] = $mform->createElement('select', 'bonus' . $i, "", $bonuspercentage);
-            $bonusscoregroup[$i][] = $mform->createElement(
-                'static',
-                '',
-                null,
-                '<span class="form-check-inline fitem" style="width: auto;">'
-                . get_string('offairnessbonus', 'videoassessment') . '</span>',
-            );
-            $grouplabel = "";
-            switch ($i) {
-                case 1:
-                    $grouplabel = "Scale";
-                    $mform->setDefault('bonusscale' . $i, 5);
-                    $mform->setDefault('bonus' . $i, 100);
-                    break;
-                case 2:
-                    $mform->setDefault('bonusscale' . $i, 10);
-                    $mform->setDefault('bonus' . $i, 80);
-                    break;
-                case 3:
-                    $mform->setDefault('bonusscale' . $i, 15);
-                    $mform->setDefault('bonus' . $i, 60);
-                    break;
-                case 4:
-                    $mform->setDefault('bonusscale' . $i, 20);
-                    $mform->setDefault('bonus' . $i, 40);
-                    break;
-                case 5:
-                    $mform->setDefault('bonusscale' . $i, 25);
-                    $mform->setDefault('bonus' . $i, 20);
-                    break;
-                case 6:
-                    $mform->setDefault('bonusscale' . $i, 30);
-                    $mform->setDefault('bonus' . $i, 0);
-                    break;
-                default:
-                    break;
-            }
-            $mform->addGroup($bonusscoregroup[$i], "bonusscoregroup" . $i, $grouplabel, ['', ''], false);
-        }
-
-        $mform->addElement('select', 'selffairnessbonus', get_string('selffairnessbonus', 'videoassessment'), [
-            '0' => get_string('no', 'videoassessment'),
-            '1' => get_string('yes', 'videoassessment'),
-        ]);
-        $mform->addHelpButton('selffairnessbonus', 'selffairnessbonus', 'videoassessment');
-        $mform->addElement(
-            'select',
-            'bonuspercentage',
-            get_string('bonuspercentage', 'videoassessment') . '<br>(' . get_string('ontopoftotal', 'videoassessment') . ')',
-            $bonuspercentage,
-        );
-        $mform->setDefault('bonuspercentage', 10);
-        for ($i = 1; $i <= 6; $i++) {
-            $bonusscoregroup[$i][] = $mform->createElement(
-                'static',
-                '',
-                null,
-                '<span class="form-check-inline fitem" style="width: auto;">' . get_string('within', 'videoassessment') . '</span>',
-            );
-            $bonusscoregroup[$i][] = $mform->createElement('select', 'bonusscale' . $i, "", $bonuspercentage);
-            $bonusscoregroup[$i][] = $mform->createElement(
-                'static',
-                '',
-                null,
-                '<span class="form-check-inline fitem" style="width: auto;">'
-                . get_string('ofteacherscore', 'videoassessment') . '</span>',
-            );
-            $bonusscoregroup[$i][] = $mform->createElement('select', 'bonus' . $i, "", $bonuspercentage);
-            $bonusscoregroup[$i][] = $mform->createElement(
-                'static',
-                '',
-                null,
-                '<span class="form-check-inline fitem" style="width: auto;">'
-                . get_string('offairnessbonus', 'videoassessment') . '</span>',
-            );
-            $grouplabel = "";
-            switch ($i) {
-                case 1:
-                    $grouplabel = "Scale";
-                    $mform->setDefault('selfbonusscale' . $i, 5);
-                    $mform->setDefault('selfbonus' . $i, 100);
-                    break;
-                case 2:
-                    $mform->setDefault('selfbonusscale' . $i, 10);
-                    $mform->setDefault('selfbonus' . $i, 80);
-                    break;
-                case 3:
-                    $mform->setDefault('selfbonusscale' . $i, 15);
-                    $mform->setDefault('selfbonus' . $i, 60);
-                    break;
-                case 4:
-                    $mform->setDefault('selfbonusscale' . $i, 20);
-                    $mform->setDefault('selfbonus' . $i, 40);
-                    break;
-                case 5:
-                    $mform->setDefault('selfbonusscale' . $i, 25);
-                    $mform->setDefault('selfbonus' . $i, 20);
-                    break;
-                case 6:
-                    $mform->setDefault('selfbonusscale' . $i, 30);
-                    $mform->setDefault('selfselfbonus' . $i, 0);
-                    break;
-                default:
-                    break;
-            }
-            $mform->addGroup($selfbonusscoregroup[$i], "selfbonusscoregroup" . $i, $grouplabel, ['', ''], false);
-        }
 
         $mform->addElement('header', 'ratings', get_string('ratings', 'videoassessment'));
         $mform->addHelpButton('ratings', 'ratings', 'videoassessment');
@@ -294,6 +161,8 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $students = get_enrolled_users($this->context);
         $maxusedpeers = min(count($students), self::MAX_USED_PEERS_LIMIT);
         $usedpeeropts = range(0, $maxusedpeers);
+        // Add unlimited option with value -1.
+        $usedpeeropts[-1] = get_string('unlimited', 'videoassessment');
         $mform->addElement('select', 'usedpeers', get_string('usedpeers', 'videoassessment'), $usedpeeropts);
         $mform->setDefault('usedpeers', 0);
         $mform->addHelpButton('usedpeers', 'usedpeers', 'videoassessment');
@@ -314,8 +183,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
      * Validate form data for video assessment configuration.
      *
      * Performs comprehensive validation including rating percentages,
-     * date consistency, and grading limits for both quick setup and
-     * advanced configuration modes.
+     * date consistency, and grading limits.
      *
      * @param array $data Form data to validate
      * @param array $files Uploaded files data
@@ -324,55 +192,36 @@ class mod_videoassessment_mod_form extends moodleform_mod {
     public function validation($data, $files) {
         // Allow plugin videoassessment types to do any extra validation after the form has been submitted.
         $errors = parent::validation($data, $files);
-        if ($data['isquickSetup'] == 1) {
-            if ($data['isselfassesstype'] == 1
-                || $data['isteacherassesstype'] == 1
-                || $data['ispeerassesstype'] == 1
-                || $data['isclassassesstype'] == 1) {
-                $quickratingsum = 0;
-                $checkboxes = ['selfassess', 'teacherassess', 'peerassess', 'classassess'];
-                foreach ($checkboxes as $check) {
-                    if ($data['is' . $check . 'type'] == 1) {
-                        $quickratingsum += $data[$check];
-                    }
-                }
-                if ($quickratingsum != 100) {
-                    $errors['assesstypegroup'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
-                }
-            }
-            if ($data['gradingsimpledirect'] > 100) {
-                $errors['simpledirectgroup'] = get_string('errorovermaximumpossiblegrade', 'videoassessment');
-            }
-        } else {
-            $ratingsum = $data['ratingteacher'] + $data['ratingself'] + $data['ratingpeer'] + $data['ratingclass'];
-            if ($ratingsum != 100) {
-                $errors['ratingerror'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
-            }
+        
+        $ratingsum = $data['ratingteacher'] + $data['ratingself'] + $data['ratingpeer'] + $data['ratingclass'];
+        if ($ratingsum != 100) {
+            $errors['ratingerror'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
+        }
 
-            if (!empty($data['allowsubmissionsfromdate']) && !empty($data['duedate'])) {
-                if ($data['duedate'] < $data['allowsubmissionsfromdate']) {
-                    $errors['duedate'] = get_string('duedatevalidation', 'assign');
-                }
-            }
-            if (!empty($data['cutoffdate']) && !empty($data['duedate'])) {
-                if ($data['cutoffdate'] < $data['duedate']) {
-                    $errors['cutoffdate'] = get_string('cutoffdatevalidation', 'assign');
-                }
-            }
-            if (!empty($data['allowsubmissionsfromdate']) && !empty($data['cutoffdate'])) {
-                if ($data['cutoffdate'] < $data['allowsubmissionsfromdate']) {
-                    $errors['cutoffdate'] = get_string('cutoffdatefromdatevalidation', 'assign');
-                }
-            }
-            if ($data['gradingduedate']) {
-                if ($data['allowsubmissionsfromdate'] && $data['allowsubmissionsfromdate'] > $data['gradingduedate']) {
-                    $errors['gradingduedate'] = get_string('gradingduefromdatevalidation', 'assign');
-                }
-                if ($data['duedate'] && $data['duedate'] > $data['gradingduedate']) {
-                    $errors['gradingduedate'] = get_string('gradingdueduedatevalidation', 'assign');
-                }
+        if (!empty($data['allowsubmissionsfromdate']) && !empty($data['duedate'])) {
+            if ($data['duedate'] < $data['allowsubmissionsfromdate']) {
+                $errors['duedate'] = get_string('duedatevalidation', 'assign');
             }
         }
+        if (!empty($data['cutoffdate']) && !empty($data['duedate'])) {
+            if ($data['cutoffdate'] < $data['duedate']) {
+                $errors['cutoffdate'] = get_string('cutoffdatevalidation', 'assign');
+            }
+        }
+        if (!empty($data['allowsubmissionsfromdate']) && !empty($data['cutoffdate'])) {
+            if ($data['cutoffdate'] < $data['allowsubmissionsfromdate']) {
+                $errors['cutoffdate'] = get_string('cutoffdatefromdatevalidation', 'assign');
+            }
+        }
+        if ($data['gradingduedate']) {
+            if ($data['allowsubmissionsfromdate'] && $data['allowsubmissionsfromdate'] > $data['gradingduedate']) {
+                $errors['gradingduedate'] = get_string('gradingduefromdatevalidation', 'assign');
+            }
+            if ($data['duedate'] && $data['duedate'] > $data['gradingduedate']) {
+                $errors['gradingduedate'] = get_string('gradingdueduedatevalidation', 'assign');
+            }
+        }
+        
         return $errors;
     }
 
@@ -380,7 +229,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
      * Add standard grading elements to the form with video assessment specific options.
      *
      * Creates grading configuration interface including advanced grading methods,
-     * training materials, fairness bonus settings, and grade categories.
+     * training materials, and grade categories.
      *
      * @param string $itemname Grade item name for component integration
      * @return void
@@ -453,12 +302,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     $mform->addHelpButton('advancedgradingmethodsgroup', 'advancedgradingmethodsgroup', 'videoassessment');
                 }
             }
-            $mform->addElement('select', 'training', get_string('trainingpretest', 'videoassessment'), [
-                '0' => get_string('no', 'videoassessment'),
-                '1' => get_string('yes', 'videoassessment'),
-            ]);
-            $mform->setDefault('training', 0);
-            $mform->addHelpButton('training', 'trainingpretest', 'videoassessment');
+
             $mform->addElement(
                 'filemanager',
                 'trainingvideo',
@@ -506,9 +350,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             $mform->addHelpButton($gradepassfieldname, 'gradepass', 'grades');
             $mform->setType($gradepassfieldname, PARAM_RAW);
 
-            $PAGE->requires->js_call_amd('mod_videoassessment/mod_form', 'initFairnessBonusChange');
-            $PAGE->requires->js_call_amd('mod_videoassessment/mod_form', 'initQuickSetupPeerChange');
-            $PAGE->requires->js_call_amd('mod_videoassessment/mod_form', 'initTrainingChange');
         }
     }
 
@@ -886,88 +727,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $PAGE->requires->css(new \moodle_url('/mod/videoassessment/mod_form.css'));
     }
 
-    /**
-     * Add quick setup configuration elements to the form.
-     *
-     * Creates simplified assessment type configuration interface with
-     * checkboxes for different assessment types and peer count settings.
-     *
-     * @return void
-     */
-    private function add_quick_setup_element() {
-        global $PAGE;
-        $cm = $PAGE->cm;
-
-        $mform = &$this->_form;
-        for ($i = 100; $i >= 0; $i--) {
-            $ratingopts[$i] = $i . '%';
-        }
-        $numberofpeers = [];
-        for ($i = 0; $i <= 5; $i++) {
-            $numberofpeers[$i] = $i;
-        }
-        $mform->addElement('header', 'quickSetup', get_string('quickSetup', 'videoassessment'));
-        $mform->addElement('hidden', 'isquickSetup', 0);
-        $mform->setType('isquickSetup', PARAM_RAW);
-        $mform->addHelpButton('quickSetup', 'quickSetup', 'videoassessment');
-
-        $assesstypegroup[] = $mform->createElement('advcheckbox', 'isselfassesstype', "", get_string('self', 'videoassessment'));
-        $mform->setDefault('isselfassesstype', 0);
-        $assesstypegroup[] = $mform->createElement('select', 'selfassess', "", $ratingopts);
-        $mform->setDefault('selfassess', 0);
-
-        $assesstypegroup[] = $mform->createElement('advcheckbox', 'ispeerassesstype', "", get_string('peer', 'videoassessment'));
-        $mform->setDefault('ispeerassesstype', 0);
-        $assesstypegroup[] = $mform->createElement('select', 'peerassess', "", $ratingopts);
-        $mform->setDefault('peerassess', 0);
-
-        $assesstypegroup[] = $mform->createElement(
-            'advcheckbox',
-            'isteacherassesstype',
-            "",
-            get_string('teacher', 'videoassessment'),
-        );
-        $mform->setDefault('isteacherassesstype', 0);
-        $assesstypegroup[] = $mform->createElement('select', 'teacherassess', "", $ratingopts);
-        $mform->setDefault('teacherassess', 100);
-
-        $assesstypegroup[] = $mform->createElement('advcheckbox', 'isclassassesstype', "", get_string('class', 'videoassessment'));
-        $mform->setDefault('isclassassesstype', 0);
-        $assesstypegroup[] = $mform->createElement('select', 'classassess', "", $ratingopts);
-        $mform->setDefault('classassess', 0);
-
-        $mform->addGroup($assesstypegroup, 'assesstypegroup', get_string('typeofassessment', 'videoassessment'), [''], false);
-
-        $students = get_enrolled_users($this->context);
-        $maxusedpeers = min(count($students), self::MAX_USED_PEERS_LIMIT);
-        $mform->addElement('select', 'numberofpeers', get_string('numberofpeers', 'videoassessment'), $numberofpeers);
-        $mform->setDefault('numberofpeers', 0);
-        $mform->addHelpButton('numberofpeers', 'usedpeers', 'videoassessment');
-
-        $simpledirectgroup[] = $mform->createElement('text', 'gradingsimpledirect', "", ['size' => 5]);
-        $mform->setType('gradingsimpledirect', PARAM_RAW);
-        $mform->setDefault('gradingsimpledirect', 100);
-        $simpledirectgroup[] = $mform->createElement(
-            'static',
-            '',
-            null,
-            '<span class="form-check-inline  fitem" style="width: auto;">' .
-            get_string('maximumpoints', 'videoassessment') .
-            '</span>',
-        );
-
-        $mform->addGroup(
-            $simpledirectgroup,
-            'simpledirectgroup',
-            get_string('simpledirectgroup', 'videoassessment'),
-            [' ', '<br />'],
-            false,
-        );
-
-        $mform->addElement('button', 'quickSetupButton', get_string('submit'));
-        $PAGE->requires->jquery();
-        $PAGE->requires->js_call_amd('mod_videoassessment/grademanage', 'init_grademanage', []);
-    }
 
     /**
      * Add a link element to the form for management actions.

@@ -47,6 +47,20 @@ class video_upload extends \moodleform {
         /* @var $va \mod_videoassessment\va */
         $va = $this->_customdata->va;
 
+        // Get video publishing settings.
+        // Default to true (1) if field doesn't exist or is null (for backwards compatibility).
+        $allowyoutube = !isset($va->va->allowyoutube) || $va->va->allowyoutube;
+        $allowvideoupload = !isset($va->va->allowvideoupload) || $va->va->allowvideoupload;
+        $allowvideorecord = !isset($va->va->allowvideorecord) || $va->va->allowvideorecord;
+
+        // Default to YouTube (1) as the selected option.
+        $defaultuploadtype = 1; // YouTube is always default when available.
+        if (!$allowyoutube && $allowvideoupload) {
+            $defaultuploadtype = 0; // File upload if YouTube not available.
+        } else if (!$allowyoutube && !$allowvideoupload && $allowvideorecord) {
+            $defaultuploadtype = 2; // Record if others not available.
+        }
+
         $mobile = va::uses_mobile_upload();
         if ($mobile) {
             $mform->updateAttributes(array('enctype' => 'multipart/form-data', "id" => "mobileform"));
@@ -71,82 +85,92 @@ class video_upload extends \moodleform {
         $mform->setType('actionmodel', PARAM_INT);
         $mform->addElement('header', 'uploadingvideo', get_string('uploadingvideo', 'videoassessment'));
         $mform->addHelpButton('uploadingvideo', 'uploadingvideo', 'videoassessment');
-        $mform->addElement('radio', 'upload', get_string('uploadfile', 'videoassessment'), '', 0);
-        $mform->addHelpButton('upload', 'uploadfile', 'videoassessment');
 
-        if ($mobile) {
+        // YouTube URL option (first).
+        if ($allowyoutube) {
+            $mform->addElement('radio', 'upload', get_string('uploadyoutube', 'videoassessment'), '', 1);
+            $mform->addHelpButton('upload', 'uploadyoutube', 'videoassessment');
+
+            if ($mobile) {
+                $mform->addElement('text', 'mobileurl', '', array('size' => 40));
+                $mform->setType('mobileurl', PARAM_URL);
+            } else {
+                $mform->addElement('text', 'url', '', array('size' => 40));
+                $mform->setType('url', PARAM_URL);
+            }
+        }
+
+        // Video file upload option (second).
+        if ($allowvideoupload) {
+            $mform->addElement('radio', 'upload', get_string('uploadfile', 'videoassessment'), '', 0);
+            $mform->addHelpButton('upload', 'uploadfile', 'videoassessment');
+
+            if ($mobile) {
+                $mform->addElement(
+                    "html",
+                    "<div class='mdl-align upload-progress' style='display:none'><i class='icon fa fa-circle-o-notch fa-spin fa-fw' aria-hidden='true'></i><br/><h3>" .
+                    get_string('uploadingvideonotice', 'videoassessment') .
+                    "</h3></div><br/>",
+                );
+            }
+            $maxbytes = $COURSE->maxbytes;
+            if ($CFG->version < va::MOODLE_VERSION_23) {
+                $acceptedtypes = array('*');
+            } else {
+                $acceptedtypes = array('video', 'audio');
+            }
+
+            if ($mobile) {
+                $input = \html_writer::empty_tag('input',
+                    array(
+                        'type' => 'file',
+                        'id' => 'id_mobilevideo',
+                        'name' => 'mobilevideo',
+                        'accept' => 'video/*',
+                    ));
+                $mform->addElement('static', 'mobilevideo', "", $input);
+            } else {
+                $str = va::str('video');
+                $mform->addElement('filemanager', 'video',
+                    "",
+                    null,
+                    array(
+                        'subdirs' => 0,
+                        'maxbytes' => $maxbytes,
+                        'maxfiles' => 1,
+                        'accepted_types' => $acceptedtypes,
+                    )
+                );
+            }
+        }
+
+        // Video recording option (third).
+        if ($allowvideorecord) {
+            $mform->addElement('radio', 'upload', get_string('recordnewvideo', 'videoassessment'), '', 2);
+            $mform->addHelpButton('upload', 'recordnewvideo', 'videoassessment');
+            $mform->addElement(
+                'html',
+                '<div id="recordrtc" class="recordrtc"><div id="record-content-div"></div>
+                    <span id="btn-start-recording" class="btn btn-secondary">' . get_string('startrecoding', 'videoassessment') .'</span>
+                    <span id="btn-pause-recording" class="btn btn-secondary"style="display: none; font-size: 15px;">'. get_string('pause', 'videoassessment') .'</span>
+                    </span></div>'
+            );
             $mform->addElement(
                 "html",
                 "<div class='mdl-align upload-progress' style='display:none'><i class='icon fa fa-circle-o-notch fa-spin fa-fw' aria-hidden='true'></i><br/><h3>" .
                 get_string('uploadingvideonotice', 'videoassessment') .
-                "</h3></div><br/>",
+                "</h3></div><br/>"
             );
-        }
-        $maxbytes = $COURSE->maxbytes;
-        if ($CFG->version < va::MOODLE_VERSION_23) {
-            $acceptedtypes = array('*');
-        } else {
-            $acceptedtypes = array('video', 'audio');
-        }
 
-        if ($mobile) {
-            $input = \html_writer::empty_tag('input',
-                array(
-                    'type' => 'file',
-                    'id' => 'id_mobilevideo',
-                    'name' => 'mobilevideo',
-                    'accept' => 'video/*',
-                ));
-            $mform->addElement('static', 'mobilevideo', "", $input);
-        } else {
-            $str = va::str('video');
-            $mform->addElement('filemanager', 'video',
-                "",
-                null,
-                array(
-                    'subdirs' => 0,
-                    'maxbytes' => $maxbytes,
-                    'maxfiles' => 1,
-                    'accepted_types' => $acceptedtypes,
-                )
-            );
+            $PAGE->requires->js('/mod/videoassessment/RecordRTC.js');
+            $PAGE->requires->js('/mod/videoassessment/DetectRTC.js');
+            $PAGE->requires->js_call_amd('mod_videoassessment/record', 'reCord', []);
         }
-
-        $radios = [];
-        $radios[] =& $mform->createElement('radio', 'upload', get_string('uploadyoutube', 'videoassessment'), '', 1);
-
-        if ($mobile) {
-            $radios[] =& $mform->createElement('text', 'mobileurl', 'url', array('size' => 40));
-            $mform->setType('mobileurl', PARAM_URL);
-        } else {
-            $radios[] =& $mform->createElement('text', 'url', 'url', array('size' => 40));
-            $mform->setType('url', PARAM_URL);
-        }
-        $mform->addGroup($radios, 'radios', "", array(' <br/>', '<br/>'), false);
-        $mform->addHelpButton('radios', 'uploadyoutube', 'videoassessment');
-
-        $recordradios = array();
-        $recordradios[] = &$mform->createElement('radio', 'upload', get_string('recordnewvideo', 'videoassessment'), '', 2);
-        $recordradios[] = &$mform->createElement(
-            'html',
-            '<div id="recordrtc" class="recordrtc"><div id="record-content-div"></div>
-                <span id="btn-start-recording" class="btn btn-secondary">' . get_string('startrecoding', 'videoassessment') .'</span>
-                <span id="btn-pause-recording" class="btn btn-secondary"style="display: none; font-size: 15px;">'. get_string('pause', 'videoassessment') .'</span>
-                </span></div>'
-        );
-        $mform->addGroup($recordradios, 'recordradios', "", array(' <br/>', '<br/>'), false);
-        $mform->addElement(
-            "html",
-            "<div class='mdl-align upload-progress' style='display:none'><i class='icon fa fa-circle-o-notch fa-spin fa-fw' aria-hidden='true'></i><br/><h3>" .
-            get_string('uploadingvideonotice', 'videoassessment') .
-            "</h3></div><br/>"
-        );
-        $mform->addHelpButton('recordradios', 'recordradios', 'videoassessment');
+        
+        // Set default upload type - must be after all radio buttons are added.
+        $mform->setDefault('upload', $defaultuploadtype);
 
         $PAGE->requires->js_call_amd('mod_videoassessment/mod_form', 'initUploadTypeChange');
-        $PAGE->requires->js('/mod/videoassessment/RecordRTC.js');
-        $PAGE->requires->js('/mod/videoassessment/DetectRTC.js');
-        $PAGE->requires->js_call_amd('mod_videoassessment/record', 'reCord', []);
         $buttonarray = array();
         if ($mobile) {
             $PAGE->requires->js_call_amd('mod_videoassessment/videoassessment', 'init_mobile_upload_progress_bar', array());

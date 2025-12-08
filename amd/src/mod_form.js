@@ -168,13 +168,11 @@ define(['jquery'], function ($) {
         rearrangeRadios('#fgroup_id_radios', '#id_upload_1');
         rearrangeRadios('#fgroup_id_recordradios', '#id_upload_2');
 
-        const actionVal = $('.actionmodel').val();
-        if (actionVal == 1) {
-            $('#id_upload_0').prop('checked', false);
+        // Default to YouTube if it exists, otherwise keep current selection.
+        if (youtubeRadio.length) {
+            uploadRadio.prop('checked', false);
+            recordNewVideo.prop('checked', false);
             youtubeRadio.prop('checked', true);
-        } else {
-            $('#id_upload_1').prop('checked', false);
-            uploadRadio.prop('checked', true);
         }
 
         const updateVisibility = () => {

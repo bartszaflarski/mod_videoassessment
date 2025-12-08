@@ -2617,13 +2617,24 @@ class va {
      * Generate random peer mappings for a set of users.
      *
      * @param int[] $userids List of user ids
-     * @param int $numpeers Number of peers per user
+     * @param int $numpeers Number of peers per user (-1 for unlimited/all other users)
      * @return array Mapping: userid => int[] peer ids
      */
     public function get_random_peers_for_users(array $userids, $numpeers) {
-        $maxretry = 3; // Maximum retry count to avoid a “stuck” state.
+        $maxretry = 3; // Maximum retry count to avoid a "stuck" state.
 
         assert(is_numeric($numpeers));
+        
+        // Handle unlimited peers case (-1 means all other users).
+        if ($numpeers == -1) {
+            $peers = array();
+            foreach ($userids as $userid) {
+                // Assign all other users as peers.
+                $peers[$userid] = array_values(array_diff($userids, array($userid)));
+            }
+            return $peers;
+        }
+        
         assert(count($userids) > $numpeers);
 
         $inner = function ($userids, $numpeers) {
