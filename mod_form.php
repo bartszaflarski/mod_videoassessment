@@ -161,17 +161,25 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $students = get_enrolled_users($this->context);
         $maxusedpeers = min(count($students), self::MAX_USED_PEERS_LIMIT);
         $usedpeeropts = range(0, $maxusedpeers);
-        // Add unlimited option with value -1.
-        $usedpeeropts[-1] = get_string('unlimited', 'videoassessment');
         $mform->addElement('select', 'usedpeers', get_string('usedpeers', 'videoassessment'), $usedpeeropts);
         $mform->setDefault('usedpeers', 0);
         $mform->addHelpButton('usedpeers', 'usedpeers', 'videoassessment');
 
+        // Assign peers section.
+        $mform->addElement('header', 'assignpeerssection', get_string('assignpeers', 'videoassessment'));
+        $mform->addHelpButton('assignpeerssection', 'assignpeers', 'videoassessment');
+        $mform->setExpanded('assignpeerssection', false);
+
         if ($cm) {
-            $href = new moodle_url('/mod/videoassessment/view.php', ['id' => $cm->id, 'action' => 'peers']);
-            $linktext = get_string('assignpeers', 'videoassessment');
-            $mform->addGroup([], 'assignpeersgroup', "<a class='' href='$href'>$linktext</a>", null, false);
-            $mform->addHelpButton('assignpeersgroup', 'assignpeers', 'videoassessment');
+            // Show link to assign peers page for existing activities.
+            $peersurl = new moodle_url('/mod/videoassessment/view.php', ['id' => $cm->id, 'action' => 'peers']);
+            $linkhtml = '<a class="btn btn-secondary" href="' . $peersurl->out() . '">' .
+                get_string('assignpeers', 'videoassessment') . '</a>';
+            $mform->addElement('static', 'assignpeerslink', '', $linkhtml);
+        } else {
+            // Show message for new activities.
+            $mform->addElement('static', 'assignpeersinfo', '',
+                get_string('assignpeersaftersave', 'videoassessment'));
         }
 
         $this->standard_coursemodule_elements();
@@ -183,7 +191,8 @@ class mod_videoassessment_mod_form extends moodleform_mod {
      * Validate form data for video assessment configuration.
      *
      * Performs comprehensive validation including rating percentages,
-     * date consistency, and grading limits.
+     * date consistency, and grading limits for both quick setup and
+     * advanced configuration modes.
      *
      * @param array $data Form data to validate
      * @param array $files Uploaded files data
@@ -192,7 +201,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
     public function validation($data, $files) {
         // Allow plugin videoassessment types to do any extra validation after the form has been submitted.
         $errors = parent::validation($data, $files);
-        
+
         $ratingsum = $data['ratingteacher'] + $data['ratingself'] + $data['ratingpeer'] + $data['ratingclass'];
         if ($ratingsum != 100) {
             $errors['ratingerror'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
@@ -221,7 +230,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 $errors['gradingduedate'] = get_string('gradingdueduedatevalidation', 'assign');
             }
         }
-        
+
         return $errors;
     }
 
@@ -229,7 +238,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
      * Add standard grading elements to the form with video assessment specific options.
      *
      * Creates grading configuration interface including advanced grading methods,
-     * training materials, and grade categories.
+     * training materials, fairness bonus settings, and grade categories.
      *
      * @param string $itemname Grade item name for component integration
      * @return void
@@ -302,7 +311,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     $mform->addHelpButton('advancedgradingmethodsgroup', 'advancedgradingmethodsgroup', 'videoassessment');
                 }
             }
-
             $mform->addElement(
                 'filemanager',
                 'trainingvideo',
@@ -349,7 +357,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             $mform->addElement('text', $gradepassfieldname, get_string('gradepass', 'grades'));
             $mform->addHelpButton($gradepassfieldname, 'gradepass', 'grades');
             $mform->setType($gradepassfieldname, PARAM_RAW);
-
         }
     }
 
@@ -726,7 +733,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $PAGE->requires->js_call_amd('mod_videoassessment/mod_form', 'initNotificationFormChange');
         $PAGE->requires->css(new \moodle_url('/mod/videoassessment/mod_form.css'));
     }
-
 
     /**
      * Add a link element to the form for management actions.
