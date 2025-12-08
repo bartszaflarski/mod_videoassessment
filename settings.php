@@ -98,4 +98,14 @@ if ($ADMIN->fulltree) {
             new lang_string('backupusersdesc', 'videoassessment'),
             0)
         );
+
+    // File uploads section.
+    $settings->add(new admin_setting_heading('fileuploads',
+        new lang_string('fileuploads', 'videoassessment'), ''));
+    $settings->add(
+        new admin_setting_configcheckbox('videoassessment/preventvideouploads',
+            new lang_string('preventvideouploads', 'videoassessment'),
+            new lang_string('preventvideouploads_help', 'videoassessment'),
+            0)
+        );
 }

@@ -85,17 +85,34 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $mform->addElement('header', 'videopublishing', get_string('videopublishing', 'videoassessment'));
         $mform->setExpanded('videopublishing', true);
 
+        // Check if video uploads are prevented globally.
+        $preventvideouploads = get_config('videoassessment', 'preventvideouploads');
+
         $mform->addElement('advcheckbox', 'allowyoutube', get_string('allowyoutube', 'videoassessment'));
         $mform->setDefault('allowyoutube', 1);
         $mform->addHelpButton('allowyoutube', 'allowyoutube', 'videoassessment');
 
-        $mform->addElement('advcheckbox', 'allowvideoupload', get_string('allowvideoupload', 'videoassessment'));
-        $mform->setDefault('allowvideoupload', 1);
-        $mform->addHelpButton('allowvideoupload', 'allowvideoupload', 'videoassessment');
+        // Only show file upload option if not prevented globally.
+        if (!$preventvideouploads) {
+            $mform->addElement('advcheckbox', 'allowvideoupload', get_string('allowvideoupload', 'videoassessment'));
+            $mform->setDefault('allowvideoupload', 1);
+            $mform->addHelpButton('allowvideoupload', 'allowvideoupload', 'videoassessment');
+        } else {
+            // Add hidden field with value 0 when prevented.
+            $mform->addElement('hidden', 'allowvideoupload', 0);
+            $mform->setType('allowvideoupload', PARAM_INT);
+        }
 
-        $mform->addElement('advcheckbox', 'allowvideorecord', get_string('allowvideorecord', 'videoassessment'));
-        $mform->setDefault('allowvideorecord', 1);
-        $mform->addHelpButton('allowvideorecord', 'allowvideorecord', 'videoassessment');
+        // Only show video record option if not prevented globally.
+        if (!$preventvideouploads) {
+            $mform->addElement('advcheckbox', 'allowvideorecord', get_string('allowvideorecord', 'videoassessment'));
+            $mform->setDefault('allowvideorecord', 1);
+            $mform->addHelpButton('allowvideorecord', 'allowvideorecord', 'videoassessment');
+        } else {
+            // Add hidden field with value 0 when prevented.
+            $mform->addElement('hidden', 'allowvideorecord', 0);
+            $mform->setType('allowvideorecord', PARAM_INT);
+        }
 
         $mform->addElement('header', 'availability', get_string('availability', 'assign'));
         $mform->setExpanded('availability', false);
@@ -170,17 +187,13 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $mform->addHelpButton('assignpeerssection', 'assignpeers', 'videoassessment');
         $mform->setExpanded('assignpeerssection', false);
 
-        if ($cm) {
-            // Show link to assign peers page for existing activities.
-            $peersurl = new moodle_url('/mod/videoassessment/view.php', ['id' => $cm->id, 'action' => 'peers']);
-            $linkhtml = '<a class="btn btn-secondary" href="' . $peersurl->out() . '">' .
-                get_string('assignpeers', 'videoassessment') . '</a>';
-            $mform->addElement('static', 'assignpeerslink', '', $linkhtml);
-        } else {
-            // Show message for new activities.
-            $mform->addElement('static', 'assignpeersinfo', '',
-                get_string('assignpeersaftersave', 'videoassessment'));
-        }
+        // Show peer assignment interface (works for both new and existing activities).
+        $peershtml = $this->render_peers_assignment_interface($cm);
+        $mform->addElement('html', $peershtml);
+
+        // Hidden field to store peer assignments as JSON (for new activities).
+        $mform->addElement('hidden', 'peerassignments', '{}');
+        $mform->setType('peerassignments', PARAM_RAW);
 
         $this->standard_coursemodule_elements();
 
@@ -749,5 +762,151 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $mform = &$this->_form;
         $mform->addGroup([], $linkname . 'group', "<a class='managelink' href='$href'>$linktext</a>", null, false);
         $mform->addHelpButton($linkname . 'group', $linkname, 'videoassessment');
+    }
+
+    /**
+     * Render the peer assignment interface for embedding in the form.
+     *
+     * Creates an HTML table with student names and peer assignment dropdowns,
+     * plus random assignment links.
+     *
+     * @param object|null $cm Course module object (null for new activities)
+     * @return string HTML content for the peer assignment interface
+     */
+    private function render_peers_assignment_interface($cm) {
+        global $DB, $OUTPUT, $PAGE;
+
+        $o = '';
+        $isexisting = !empty($cm);
+
+        // Get students.
+        $students = get_enrolled_users($this->context, '', 0, 'u.*', 'lastname, firstname');
+
+        if (empty($students)) {
+            $o .= html_writer::tag('p', get_string('nostudentsingroup', 'videoassessment'),
+                ['class' => 'alert alert-info']);
+            return $o;
+        }
+
+        // Build student data for JavaScript.
+        $studentdata = [];
+        foreach ($students as $student) {
+            $studentdata[$student->id] = fullname($student);
+        }
+
+        // Get existing peer assignments if editing.
+        $existingpeers = [];
+        if ($isexisting) {
+            $instance = $DB->get_record('videoassessment', ['id' => $cm->instance], '*', MUST_EXIST);
+            $peerrecords = $DB->get_records('videoassessment_peers', ['videoassessment' => $instance->id]);
+            foreach ($peerrecords as $record) {
+                if (!isset($existingpeers[$record->userid])) {
+                    $existingpeers[$record->userid] = [];
+                }
+                $existingpeers[$record->userid][] = $record->peerid;
+            }
+        }
+
+        $o .= html_writer::start_tag('div', ['class' => 'peers-assignment-container', 'id' => 'peers-assignment-container']);
+
+        // Random assignment buttons (JavaScript-based for new activities).
+        $o .= html_writer::start_tag('div', ['class' => 'mb-3']);
+        $o .= get_string('assignpeersrandomly', 'videoassessment') . ': ';
+        $o .= html_writer::tag('button', get_string('course'), [
+            'type' => 'button',
+            'class' => 'btn btn-sm btn-outline-secondary',
+            'id' => 'random-peers-course',
+        ]);
+        $o .= ' ';
+        $o .= html_writer::tag('button', get_string('group'), [
+            'type' => 'button',
+            'class' => 'btn btn-sm btn-outline-secondary',
+            'id' => 'random-peers-group',
+        ]);
+        $o .= html_writer::end_tag('div');
+
+        // Build table.
+        $o .= html_writer::start_tag('table', ['class' => 'generaltable peers-table', 'id' => 'peers-table']);
+        $o .= html_writer::start_tag('thead');
+        $o .= html_writer::start_tag('tr');
+        $o .= html_writer::tag('th', get_string('fullname'));
+        $o .= html_writer::tag('th', get_string('peers', 'videoassessment'));
+        $o .= html_writer::end_tag('tr');
+        $o .= html_writer::end_tag('thead');
+        $o .= html_writer::start_tag('tbody');
+
+        foreach ($students as $user) {
+            $userpeers = isset($existingpeers[$user->id]) ? $existingpeers[$user->id] : [];
+
+            $o .= html_writer::start_tag('tr', ['data-userid' => $user->id]);
+            $o .= html_writer::tag('td', fullname($user));
+
+            // Peers cell with container for assigned peers and dropdown.
+            $o .= html_writer::start_tag('td');
+            $o .= html_writer::start_tag('div', [
+                'class' => 'assigned-peers',
+                'id' => 'assigned-peers-' . $user->id,
+            ]);
+
+            // Show existing peers.
+            foreach ($userpeers as $peerid) {
+                if (isset($studentdata[$peerid])) {
+                    $o .= html_writer::start_tag('span', [
+                        'class' => 'peer-badge badge badge-secondary mr-1 mb-1',
+                        'data-peerid' => $peerid,
+                        'style' => 'display: inline-block; margin: 2px;',
+                    ]);
+                    $o .= $studentdata[$peerid] . ' ';
+                    $o .= html_writer::tag('a', '×', [
+                        'href' => '#',
+                        'class' => 'remove-peer text-white',
+                        'data-userid' => $user->id,
+                        'data-peerid' => $peerid,
+                        'style' => 'text-decoration: none; font-weight: bold;',
+                    ]);
+                    $o .= html_writer::end_tag('span');
+                }
+            }
+
+            $o .= html_writer::end_tag('div');
+
+            // Add peer dropdown.
+            $o .= html_writer::start_tag('select', [
+                'class' => 'form-control form-control-sm add-peer-select mt-1',
+                'data-userid' => $user->id,
+                'style' => 'width: auto; display: inline-block;',
+            ]);
+            $o .= html_writer::tag('option', get_string('addpeer', 'videoassessment'), ['value' => '']);
+            foreach ($students as $candidate) {
+                if ($candidate->id != $user->id) {
+                    $disabled = in_array($candidate->id, $userpeers) ? 'disabled' : '';
+                    $o .= html_writer::tag('option', fullname($candidate), [
+                        'value' => $candidate->id,
+                        'disabled' => $disabled ? 'disabled' : null,
+                    ]);
+                }
+            }
+            $o .= html_writer::end_tag('select');
+
+            $o .= html_writer::end_tag('td');
+            $o .= html_writer::end_tag('tr');
+        }
+
+        $o .= html_writer::end_tag('tbody');
+        $o .= html_writer::end_tag('table');
+        $o .= html_writer::end_tag('div');
+
+        // Initialize JavaScript with student data and existing peers.
+        $jsparams = [
+            'students' => $studentdata,
+            'existingPeers' => $existingpeers,
+            'isExisting' => $isexisting,
+            'cmid' => $isexisting ? $cm->id : 0,
+            'sesskey' => sesskey(),
+            'usedpeers' => $isexisting ? $instance->usedpeers : 0,
+        ];
+        $PAGE->requires->js_call_amd('mod_videoassessment/peer_assignment', 'init', [$jsparams]);
+
+        return $o;
     }
 }

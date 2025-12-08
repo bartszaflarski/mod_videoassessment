@@ -87,6 +87,18 @@ function videoassessment_add_instance($va, $form) {
     }
     $va->id = $DB->insert_record('videoassessment', $va);
     videoassessment_update_calendar($va);
+
+    // Process peer assignments from the form.
+    if (isset($va->peerassignments)) {
+        // Debug: Log the peer assignments value.
+        debugging('Peer assignments value: ' . $va->peerassignments, DEBUG_DEVELOPER);
+        if ($va->peerassignments !== '' && $va->peerassignments !== '{}') {
+            videoassessment_save_peer_assignments($va->id, $va->peerassignments);
+        }
+    } else {
+        debugging('Peer assignments not set in form data', DEBUG_DEVELOPER);
+    }
+
     return $va->id;
 }
 
@@ -209,7 +221,48 @@ function videoassessment_update_instance($va, $form) {
         $vaobj->regrade();
     }
 
+    // Process peer assignments from the form.
+    if (isset($va->peerassignments) && $va->peerassignments !== '' && $va->peerassignments !== '{}') {
+        videoassessment_save_peer_assignments($va->id, $va->peerassignments);
+    }
+
     return true;
+}
+
+/**
+ * Save peer assignments from the form data.
+ *
+ * Processes the JSON-encoded peer assignments and updates the database.
+ * Clears existing assignments and creates new ones based on form data.
+ *
+ * @param int $videoassessmentid Video assessment instance ID
+ * @param string $peerassignmentsjson JSON-encoded peer assignments
+ * @return void
+ */
+function videoassessment_save_peer_assignments($videoassessmentid, $peerassignmentsjson) {
+    global $DB;
+
+    $peerassignments = json_decode($peerassignmentsjson, true);
+    if (empty($peerassignments) || !is_array($peerassignments)) {
+        return;
+    }
+
+    // Delete existing peer assignments for this activity.
+    $DB->delete_records('videoassessment_peers', ['videoassessment' => $videoassessmentid]);
+
+    // Insert new peer assignments.
+    foreach ($peerassignments as $userid => $peers) {
+        if (!is_array($peers)) {
+            continue;
+        }
+        foreach ($peers as $peerid) {
+            $record = new stdClass();
+            $record->videoassessment = $videoassessmentid;
+            $record->userid = (int)$userid;
+            $record->peerid = (int)$peerid;
+            $DB->insert_record('videoassessment_peers', $record);
+        }
+    }
 }
 
 /**
