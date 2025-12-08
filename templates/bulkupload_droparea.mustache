@@ -1,0 +1,62 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template mod_videoassessment/bulkupload_droparea
+
+    Template for bulk video upload with drag-and-drop functionality.
+
+    Classes required for JS:
+    * error
+
+    Data attributes required for JS:
+    * id="droparea", id="tasklist"
+
+    Context variables required for this template:
+    * None
+
+    Example context (json):
+    { }
+}}
+
+<div id="not_supported_browser" class="error">
+  {{#str}} notsupportedbrowser, mod_videoassessment {{/str}}
+</div>
+
+<form>
+  <input type="file" name="fileToUpload" id="fileToUpload">
+
+  <fieldset id="droparea" style="display:none;">
+    <legend>{{#str}} dropvideofileshere, mod_videoassessment {{/str}}</legend>
+
+    <div id="scrollarea">
+      <table id="tasklist">
+        <thead>
+          <tr>
+            <th class="filename">{{#str}} uploadfilename, mod_videoassessment {{/str}}</th>
+            <th class="filesize">{{#str}} uploadfilesize, mod_videoassessment {{/str}}</th>
+            <th class="mimetype">{{#str}} uploadmimetype, mod_videoassessment {{/str}}</th>
+            <th class="status">{{#str}} uploadstatus, mod_videoassessment {{/str}}</th>
+            <th class="progress">{{#str}} uploadprogress, mod_videoassessment {{/str}}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{! rows will be added dynamically by JS }}
+        </tbody>
+      </table>
+    </div>
+  </fieldset>
+</form>

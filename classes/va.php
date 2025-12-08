@@ -1,0 +1,3490 @@
+<?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
+/**
+ * The videoassess namespace definition.
+ *
+ * @package    mod_videoassessment
+ * @copyright  2024 Don Hinkleman (hinkelman@mac.com)
+ * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+namespace mod_videoassessment;
+
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->libdir . '/gradelib.php');
+require_once($CFG->libdir . '/tablelib.php');
+require_once($CFG->dirroot . '/grade/grading/form/lib.php');
+
+/**
+ * Core controller and helper class for the Video Assessment activity.
+ *
+ * Provides view routing, grading aggregation, peer management, and
+ * data access for the `mod_videoassessment` module.
+ *
+ * @package   mod_videoassessment
+ * @copyright 2024 Don Hinkleman (hinkelman@mac.com)
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class va {
+    /**
+     * Component name for this plugin.
+     *
+     * @var string
+     */
+    const VA = 'videoassessment';
+
+    /**
+     * DB table name storing grade items for the activity.
+     *
+     * @var string
+     */
+    const TABLE_GRADE_ITEMS = 'videoassessment_grade_items';
+    /**
+     * DB table name storing individual grades.
+     *
+     * @var string
+     */
+    const TABLE_GRADES = 'videoassessment_grades';
+
+    /**
+     * Filter flag: show all videos.
+     *
+     * @var int
+     */
+    const FILTER_ALL = 0;
+    /**
+     * Filter flag: show submitted/associated videos.
+     *
+     * @var int
+     */
+    const FILTER_SUBMITTED = 1;
+    /**
+     * Filter flag: show videos requiring grading.
+     *
+     * @var int
+     */
+    const FILTER_REQUIRE_GRADING = 2;
+
+    /**
+     * Thumbnail file extension.
+     *
+     * @var string
+     */
+    const THUMBEXT = '.jpg';
+
+    /**
+     * Moodle 2.3 version code for conditional behavior.
+     *
+     * @var int
+     */
+    const MOODLE_VERSION_23 = 2012062500;
+
+    /**
+     *
+     * @var \context_module
+     */
+    public $context;
+    /**
+     *
+     * @var \stdClass
+     */
+    public $cm;
+    /**
+     *
+     * @var \stdClass
+     */
+    public $course;
+    /**
+     *
+     * @var int
+     */
+    public $instance;
+    /**
+     *
+     * @var \mod_videoassessment_renderer|\core_renderer
+     */
+    public $output;
+    /**
+     *
+     * @var \stdClass
+     */
+    public $va;
+    /**
+     *
+     * @var \moodle_url
+     */
+    public $viewurl;
+    /**
+     *
+     * @var string
+     */
+    public $action;
+    /**
+     *
+     * @var array
+     */
+    public $jsmodule;
+    /**
+     *
+     * @var array
+     */
+    public $timings = array('before');
+    /**
+     *
+     * @var array
+     */
+    public $gradertypes = array('self', 'peer', 'teacher', 'class', 'training');
+    /**
+     *
+     * @var array
+     */
+    public $gradingareas;
+
+    /**
+     * Create a new Video Assessment controller instance.
+     *
+     * Initialises context, course module references, renderer, JS strings,
+     * and computes grading areas used throughout the module.
+     *
+     * @param \context_module $context Course module context for this activity
+     * @param \cm_info|\stdClass $cm Course module record or info object
+     * @param \stdClass $course Course record object
+     * @throws \moodle_exception If the Video Assessment instance is not found
+     */
+    public function __construct(\context_module $context, $cm, \stdClass $course) {
+        global $DB, $PAGE;
+
+        $this->context = $context;
+        $this->cm = $cm;
+        $this->course = $course;
+        $this->instance = $cm->instance;
+
+        if (!($this->va = $DB->get_record('videoassessment', array('id' => $cm->instance)))) {
+            throw new \moodle_exception('videoassessmentnotfound', self::VA);
+        }
+
+        $this->output = $PAGE->get_renderer('mod_videoassessment');
+        $this->output->va = $this;
+
+        $this->viewurl = new \moodle_url('/mod/videoassessment/view.php', array('id' => $this->cm->id));
+
+        $this->jsmodule = array(
+            'name' => 'mod_videoassessment',
+            'fullpath' => '/mod/videoassessment/module.js',
+            'requires' => array('panel', 'dd-plugin', 'json-stringify'),
+        );
+
+        $PAGE->requires->strings_for_js(array(
+            'liststudents',
+            'unassociated',
+            'associated',
+            'before',
+            'after',
+            'saveassociations',
+            'teacher',
+            'self',
+            'peer',
+            'class',
+            'reallyresetallpeers',
+            'reallydeletevideo',
+        ), 'videoassessment');
+
+        $PAGE->requires->strings_for_js(array('all'), 'moodle');
+
+        foreach ($this->timings as $timing) {
+            foreach ($this->gradertypes as $gradertype) {
+                $this->gradingareas[] = $timing . $gradertype;
+            }
+        }
+    }
+
+    /**
+     * Render the main view for the activity based on the requested action.
+     *
+     * Dispatches to sub-views (upload, peers, videos, assess, report, publish,
+     * training result) and performs state-changing operations when requested.
+     *
+     * @param string $action Action key determining which view or operation to run
+     * @return string HTML output for the selected view
+     * @throws \moodle_exception If the session key is invalid for mutating actions
+     */
+    public function view($action = '') {
+        global $PAGE;
+
+        $this->action = $action;
+
+        $mutatingactions = ['peeradd', 'peerdel', 'randompeer', 'assocadd', 'assocdel', 'videodel', 'deletevideo'];
+
+        if (in_array($action, $mutatingactions)) {
+            require_sesskey();
+        }
+
+        $o = '';
+        switch ($action) {
+            case 'peeradd':
+                $this->view_peer_add();
+                break;
+            case 'peerdel':
+                $this->view_peer_delete();
+                break;
+            case 'randompeer':
+                $this->assign_random_peers();
+                break;
+            case 'assocadd':
+                $this->view_assoc_add();
+                break;
+            case 'assocdel':
+                $this->view_assoc_delete();
+                break;
+            case 'videoassoc':
+                $this->view_video_associate();
+                break;
+            case 'videodel':
+                $this->delete_video();
+                break;
+            case 'deletevideo':
+                $this->delete_one_video_by_id();
+                break;
+            case 'downloadxls':
+                $this->download_xls_report();
+                break;
+        }
+
+        if ($action == '') {
+            // Use a layout that displays a scrollbar for horizontally long pages.
+            $PAGE->set_pagelayout('report');
+            $PAGE->requires->css('/mod/videoassessment/view.css');
+            $PAGE->requires->css('/mod/videoassessment/font/font-awesome/css/font-awesome.min.css');
+        }
+
+        if ($action == 'report' || $action == 'publish' || $action == 'upload') {
+            $PAGE->requires->css('/mod/videoassessment/view.css');
+            $PAGE->requires->css('/mod/videoassessment/getHTMLMediaElement.css');
+        }
+
+        if ($action == 'assess' || $action == 'trainingresult') {
+            $PAGE->blocks->show_only_fake_blocks();
+            $PAGE->requires->css('/mod/videoassessment/assess.css');
+            $PAGE->add_body_class('assess-page');
+        }
+        $o .= $this->output->header($this);
+        switch ($action) {
+            case 'upload':
+                $o .= $this->view_upload_video();
+                break;
+            case 'peers':
+                $o .= $this->view_peers();
+                break;
+            case 'videos':
+                $o .= $this->view_videos();
+                break;
+            case 'assess':
+                $o .= $this->view_assess();
+                break;
+            case 'report':
+                $o .= $this->view_report();
+                break;
+            case 'publish':
+                $o .= $this->view_publish();
+                break;
+            case 'trainingresult':
+                $o .= $this->view_result();
+                break;
+            default:
+                $o .= $this->view_main();
+                break;
+        }
+        $o .= $this->output->footer();
+        return $o;
+    }
+
+    /**
+     * Redirect to the module view with optional action and parameters.
+     *
+     * Updates the internal `viewurl` with the given action and additional
+     * parameters, then performs a redirect to that URL.
+     *
+     * @param string $action Optional action name to add to the URL
+     * @param array|null $params Optional query parameters to append
+     * @return void
+     */
+    private function view_redirect($action = '', $params = null) {
+        if ($action) {
+            $this->viewurl->param('action', $action);
+        }
+
+        if ($params) {
+            $this->viewurl->params($params);
+        }
+
+        redirect($this->viewurl);
+    }
+
+    /**
+     * Send a notification to the student after video association/upload.
+     *
+     * Sends via registered email and/or QuickmailJPN if enabled by settings
+     * and a teacher exists in the course context.
+     *
+     * @param int $cmid Course module id of the Video Assessment
+     * @param string $timing The timing key, e.g. 'before' or 'after'
+     * @return int|null 1 if any email was sent, 0 if attempted but not sent, null if not applicable
+     */
+    public function emailtostudent($cmid, $timing) {
+        global $DB, $USER;
+        $ismailsent = 0;
+        $videoassessment = $DB->get_record("videoassessment", array("id" => $cmid));
+        if ($videoassessment->videonotification == 1 && has_capability('mod/videoassessment:submit', $this->context, $USER->id)) {
+            if (
+                (!$this->get_associated_video($USER->id, $timing) && $videoassessment->isfirstupload == 1) ||
+                ($this->get_associated_video($USER->id, $timing) && $videoassessment->iswheneverupload == 1)
+            ) {
+                $context = \context_module::instance($cmid);
+                $teachers = get_enrolled_users($context, 'mod/videoassessment:grade', null);
+                $mailtemplate = $videoassessment->videonotificationtemplate;
+                $url = new \moodle_url(
+                    $this->viewurl,
+                    array('action' => 'assess', 'userid' => current($teachers)->id)
+                );
+                $templatearray = array(
+                    "[[student name]]" => $USER->firstname . ' ' . $USER->lastname,
+                    "[[insert link to self-assessment page]]" => $url->out(false),
+                    "[[teacher name]]" => current($teachers)->firstname . ' ' . current($teachers)->lastname,
+                );
+
+                foreach ($templatearray as $item => $template) {
+                    $mailtemplate = str_replace($item, $template, $mailtemplate);
+                }
+                $quickmailresult = false;
+                $registeredemailresult = false;
+                if ($videoassessment->isregisteredemail == 1) {
+                    $registeredemailresult = email_to_user(current($teachers), $USER, "", $mailtemplate);
+                }
+                if ($videoassessment->ismobilequickmail == 1) {
+                    // NOTE: The Quickmail JPN block is optional.
+                    // Only attempt to use its user table if the quickmailjpn plugin is installed
+                    // to avoid errors when the block is missing.
+                    $dbman = $DB->get_manager();
+                    if ($dbman->table_exists('block_quickmailjpn_users')) {
+                        $quickmail = $DB->get_record('block_quickmailjpn_users', array('userid' => current($teachers)->id));
+                        if (!empty($quickmail)) {
+                            $mobileuser = current($teachers);
+                            $mobileuser->email = $quickmail->mobileemail;
+                            $quickmailresult = email_to_user($mobileuser, $USER, "", $mailtemplate);
+                        }
+                    }
+                }
+                if ($registeredemailresult || $quickmailresult) {
+                    $ismailsent = 1;
+                }
+                return $ismailsent;
+            }
+        }
+    }
+
+    /**
+     * Render the video upload page and handle upload/association actions.
+     *
+     * Handles YouTube URL association, direct uploads, and mobile uploads.
+     * On successful non-AJAX actions, redirects to the appropriate view.
+     *
+     * @return string Rendered HTML for the upload form and page
+     * @throws \moodle_exception When provided data is invalid or upload fails
+     */
+    private function view_upload_video() {
+        global $CFG, $OUTPUT, $USER, $DB;
+        require_once($CFG->dirroot . '/mod/videoassessment/bulkupload/lib.php');
+
+        $o = '';
+
+        $form = new form\video_upload(null, (object) array('va' => $this));
+
+        if ($data = $form->get_data()) {
+            $fs = get_file_storage();
+            $upload = new \videoassessment_bulkupload($this->cm->id);
+
+            if ((!empty($data->url) || !empty($data->mobileurl)) && $data->upload == 1) {
+                if (empty($data->url)) {
+                    $url = $data->mobileurl;
+                } else {
+                    $url = $data->url;
+                }
+                $urlarr = explode('=', $url);
+                $ytinfo = $this->videoassessment_get_youtube_info($urlarr[1]);
+                $videoid = $upload->youtube_video_data_add("/", $ytinfo['title'], $ytinfo['thumbnail_url'], 'Youtube', $url);
+                if ($this->is_teacher()) {
+                    if (empty($data->user) || empty($data->timing)) {
+                        $this->view_redirect('videos');
+                    } else {
+                        $this->associate_video($data->user, $data->timing, $videoid);
+                        $this->view_redirect();
+                    }
+                } else {
+                    if (empty($data->timing) || !in_array($data->timing, array('before', 'after'))) {
+                        throw new \moodle_exception('invaliddata');
+                    }
+                    $this->associate_video($USER->id, $data->timing, $videoid);
+                    $this->emailtostudent($this->cm->instance, $data->timing);
+                    $this->view_redirect();
+                }
+            } else {
+                if (optional_param('isRecordVideo', 0, PARAM_INT) == 1) {
+                    $upload = new \videoassessment_bulkupload($this->cm->id);
+                    $fileidx = 'video';
+                    $filename = optional_param('video-filename', null, PARAM_FILE);
+                    $tempname = $upload->get_temp_name($_FILES[$fileidx]['name']);
+                    $upload->create_temp_dirs();
+                    $tmppath = $upload->get_tempdir() . '/upload/' . $tempname;
+                    if (!move_uploaded_file($_FILES[$fileidx]['tmp_name'], $tmppath)) {
+                        throw new \moodle_exception('invaliduploadedfile', self::VA);
+                    }
+                    $videoid = $upload->video_data_add($tempname, $filename);
+                    $upload->convert($tempname);
+                    $action = "";
+                    if ($this->is_teacher()) {
+                        if (empty($data->user) || empty($data->timing)) {
+                            $action = 'videos';
+                            $this->view_redirect('videos');
+                        } else {
+                            $this->associate_video($data->user, $data->timing, $videoid);
+                        }
+                    } else {
+                        if (empty($data->timing) || !in_array($data->timing, array('before', 'after'))) {
+                            throw new \moodle_exception('invaliddata');
+                        }
+                        $this->associate_video($USER->id, $data->timing, $videoid);
+                        $this->emailtostudent($this->cm->instance, $data->timing);
+                    }
+                    echo json_encode(array(
+                        'action' => $action,
+                    ));
+                    die;
+                } else {
+                    if (!empty($data->mobile)) {
+                        if (empty($_FILES['mobilevideo'])) {
+                            throw new \moodle_exception('erroruploadvideo', self::VA);
+                        }
+                        $upload->create_temp_dirs();
+                        $tmpname = $upload->get_temp_name($_FILES['mobilevideo']['name']);
+                        $tmppath = $upload->get_tempdir() . '/upload/' . $tmpname;
+                        if (!move_uploaded_file($_FILES['mobilevideo']['tmp_name'], $tmppath)) {
+                            throw new \moodle_exception('invaliduploadedfile', self::VA);
+                        }
+
+                        $videoid = $upload->video_data_add($tmpname, $_FILES['mobilevideo']['name']);
+
+                        $upload->convert($tmpname);
+                        $action = "";
+                        if ($this->is_teacher()) {
+                            if (empty($data->user) || empty($data->timing)) {
+                                $action = 'videos';
+                                $this->view_redirect('videos');
+                            } else {
+                                $this->associate_video($data->user, $data->timing, $videoid);
+                                $this->view_redirect();
+                            }
+                        } else {
+                            if (empty($data->timing) || !in_array($data->timing, array('before', 'after'))) {
+                                throw new \moodle_exception('invaliddata');
+                            }
+                            $this->associate_video($USER->id, $data->timing, $videoid);
+                            $this->emailtostudent($this->cm->instance, $data->timing);
+                        }
+                        echo json_encode(array(
+                            'action' => $action,
+                        ));
+                        die;
+
+                    } else {
+                        $files = $fs->get_area_files(\context_user::instance($USER->id)->id, 'user', 'draft', $data->video);
+                        foreach ($files as $file) {
+                            if ($file->get_filename() == '.') {
+                                continue;
+                            }
+
+                            $upload->create_temp_dirs();
+                            $tmpname = $upload->get_temp_name($file->get_filename());
+                            $tmppath = $upload->get_tempdir() . '/upload/' . $tmpname;
+                            $file->copy_content_to($tmppath);
+
+                            $videoid = $upload->video_data_add($tmpname, $file->get_filename());
+
+                            $upload->convert($tmpname);
+
+                            if ($this->is_teacher()) {
+                                if (empty($data->user) || empty($data->timing)) {
+                                    $this->view_redirect('videos');
+                                } else {
+                                    $this->associate_video($data->user, $data->timing, $videoid);
+                                    $this->view_redirect();
+                                }
+                            } else {
+                                if (empty($data->timing) || !in_array($data->timing, array('before', 'after'))) {
+                                    throw new \moodle_exception('invaliddata');
+                                }
+                                $this->associate_video($USER->id, $data->timing, $videoid);
+                                $this->emailtostudent($this->cm->instance, $data->timing);
+                                $this->view_redirect();
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+        ob_start();
+        $form->display();
+        $o .= ob_get_contents();
+        ob_end_clean();
+
+        return $o;
+    }
+
+    /**
+     * Build minimal YouTube metadata used for display and thumbnails.
+     *
+     * @param string $videoid The YouTube video id
+     * @return array{title:string,thumbnail_url:string} Title and thumbnail URL
+     */
+    public function videoassessment_get_youtube_info($videoid) {
+        $ytarr = array(
+            'title' => 'video_id=' . $videoid,
+            'thumbnail_url' => 'https://i.ytimg.com/vi/' . $videoid . '/1.jpg',
+        );
+        return $ytarr;
+    }
+
+    /**
+     * Render and handle the Peers management page for teachers.
+     *
+     * Requires grading capability. Provides random assignment links and
+     * add/delete controls for peer relationships.
+     *
+     * @return string Rendered HTML output for the peers page
+     */
+    private function view_peers() {
+        global $DB, $PAGE, $OUTPUT;
+
+        $this->teacher_only();
+
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'peersInit');
+
+        $o = '';
+
+        $url = $this->get_view_url('peers');
+        $o .= groups_print_activity_menu($this->cm, $url, true);
+
+        $o .= \html_writer::start_tag('div', array('class' => 'right'))
+            . self::str('assignpeersrandomly')
+            . ': ' . $this->output->action_link(
+                    $this->get_view_url('randompeer', array('peermode' => 'course', 'sesskey' => sesskey())),
+                    self::str('course'),
+                    null,
+                    array(
+                        'class' => 'randompeerslink',
+                        'onclick' => 'return require("mod_videoassessment/module").peersConfirmRandom();',
+                    )
+                )
+            . ' | ' . $this->output->action_link(
+                    $this->get_view_url('randompeer', array('peermode' => 'group', 'sesskey' => sesskey())),
+                    self::str('group'),
+                    null,
+                    array(
+                        'class' => 'randompeerslink',
+                        'onclick' => 'return require("mod_videoassessment/module").peersConfirmRandom();',
+                    )
+                )
+            . \html_writer::end_tag('div');
+
+        $table = new \flexible_table('peers');
+        $table->set_attribute('class', 'generaltable');
+        $table->define_baseurl('/mod/videoassessment/view.php');
+        $columns = array(
+            'name',
+            'peers',
+        );
+        $headers = array(
+            util::get_fullname_label(),
+            self::str('peers'),
+        );
+        $table->define_columns($columns);
+        $table->define_headers($headers);
+        $table->setup();
+
+        $allusers = $this->get_students(null, 0);
+        $users = $this->get_students();
+
+        $delicon = new \pix_icon('t/delete', get_string('delete'));
+        ob_start();
+        foreach ($users as $user) {
+            $peers = $DB->get_fieldset_select(
+                'videoassessment_peers',
+                'peerid',
+                'videoassessment = :va AND userid = :userid',
+                array('va' => $this->instance, 'userid' => $user->id)
+            );
+            $peernames = array();
+            foreach ($peers as $peer) {
+                $this->viewurl->params(array('action' => 'peerdel', 'userid' => $user->id, 'peerid' => $peer, 'sesskey' => sesskey()));
+                @$peernames[] = fullname($allusers[$peer]) . ' ' . $OUTPUT->action_icon($this->viewurl, $delicon);
+            }
+            \core_collator::asort($peernames);
+            $peercell = implode(\html_writer::empty_tag('br'), $peernames);
+
+            $opts = array();
+            foreach ($users as $candidate) {
+                if ($candidate->id != $user->id && !in_array($candidate->id, $peers)) {
+                    $opts[$candidate->id] = fullname($candidate);
+                }
+            }
+            $this->viewurl->params(array('action' => 'peeradd', 'userid' => $user->id, 'sesskey' => sesskey()));
+            $peercell .= $OUTPUT->single_select($this->viewurl, 'peerid', $opts, null, array(self::str('addpeer')));
+
+            $row = array(
+                fullname($user),
+                $peercell,
+            );
+            $table->add_data($row);
+        }
+        $table->finish_output();
+        $o .= ob_get_contents();
+        ob_end_clean();
+
+        $o .= \html_writer::start_tag('div', array('class' => 'center-btn')) . $this->output->action_link(
+            new \moodle_url("/course/modedit.php", array('update' => $this->cm->id, 'return' => 1)),
+            'save and return to settings',
+            null,
+            array('class' => 'btn btn-primary')
+        ) . \html_writer::end_tag('div');
+        return $o;
+    }
+
+    /**
+     * Add a user to a peer group association.
+     *
+     * Reads required params `userid` and `peergroup` and creates a record
+     * in `videoassessment_peer_assocs`, then redirects back to peers view.
+     *
+     * @return void
+     */
+    private function add_peer_member() {
+        global $DB;
+
+        $DB->insert_record('videoassessment_peer_assocs', (object) array(
+            'videoassessment' => $this->instance,
+            'userid' => required_param('userid', PARAM_INT),
+            'peergroup' => required_param('peergroup', PARAM_INT),
+        ));
+
+        $this->view_redirect('peers');
+    }
+
+    /**
+     * Create a direct peer relationship between two users.
+     *
+     * Inserts a record into `videoassessment_peers` using required params
+     * `userid` and `peerid`, then redirects back to peers view.
+     *
+     * @return void
+     */
+    private function view_peer_add() {
+        global $DB;
+
+        $DB->insert_record('videoassessment_peers', (object) array(
+            'videoassessment' => $this->instance,
+            'userid' => required_param('userid', PARAM_INT),
+            'peerid' => required_param('peerid', PARAM_INT),
+        ));
+
+        $this->view_redirect('peers');
+    }
+
+    /**
+     * Remove a peer relationship and related grading data.
+     *
+     * Deletes associated grade items and grades for all timings for the
+     * specified `userid` and `peerid`, then redirects to peers view.
+     *
+     * @return void
+     */
+    private function view_peer_delete() {
+        global $DB;
+
+        $userid = required_param('userid', PARAM_INT);
+        $peerid = required_param('peerid', PARAM_INT);
+
+        foreach ($this->timings as $timing) {
+            if (
+                $gradeitem = $DB->get_record('videoassessment_grade_items', array(
+                    'videoassessment' => $this->instance,
+                    'type' => $timing . 'peer',
+                    'gradeduser' => $userid,
+                    'grader' => $peerid,
+                ))
+            ) {
+                $DB->delete_records('videoassessment_grades', array('gradeitem' => $gradeitem->id));
+                $DB->delete_records('videoassessment_grade_items', array('id' => $gradeitem->id));
+            }
+        }
+
+        $DB->delete_records('videoassessment_peers', array(
+            'videoassessment' => $this->instance,
+            'userid' => $userid,
+            'peerid' => $peerid,
+        ));
+
+        $this->view_redirect('peers');
+    }
+
+    /**
+     * Create a new empty peer group for this activity.
+     *
+     * Inserts a record into `videoassessment_peer_groups` for the instance.
+     *
+     * @return void
+     */
+    private function add_peer_group() {
+        global $DB;
+
+        $DB->insert_record('videoassessment_peer_groups', (object) array(
+            'videoassessment' => $this->instance,
+        ));
+    }
+
+    /**
+     * Render the videos administration page for teachers.
+     *
+     * Shows unassociated/associated/all uploaded videos with filters and
+     * pagination and provides association management actions.
+     *
+     * @global \moodle_page $PAGE
+     * @global \core_renderer $OUTPUT
+     * @return string Rendered HTML for the videos list
+     */
+    private function view_videos() {
+        global $OUTPUT, $PAGE;
+
+        $this->teacher_only();
+
+        $filter = optional_param('filter', 'unassociated', PARAM_ALPHA);
+
+        $url = $this->get_view_url('videos');
+        if ($filter) {
+            $url->param('filter', $filter);
+        }
+
+        $o = '';
+
+        $o .= groups_print_activity_menu($this->cm, $url, true);
+
+        $opts = array(
+            'unassociated' => self::str('unassociated'),
+            'associated' => self::str('associated'),
+            'all' => get_string('all'),
+        );
+        $o .= $OUTPUT->single_select(
+            $this->get_view_url('videos'),
+            'filter',
+            $opts,
+            $filter,
+            null
+        );
+
+        $table = new \flexible_table('videos');
+        $table->set_attribute('class', 'generaltable');
+        $table->define_baseurl('/mod/videoassessment/videos.php');
+        $columns = array(
+            'filepath',
+            'originalname',
+            'timecreated',
+            'association',
+            'operations',
+        );
+        $headers = array(
+            self::str('video'),
+            self::str('originalname'),
+            self::str('uploadedtime'),
+            self::str('associations'),
+            self::str('operations'),
+        );
+        $table->define_columns($columns);
+        $table->define_headers($headers);
+        $table->setup();
+
+        $thumbsize = self::get_thumbnail_size();
+
+        $users = $this->get_students(\user_picture::fields('u'), 0);
+        array_walk($users, function (\stdClass $a) {
+            global $OUTPUT;
+            $a->fullname = fullname($a);
+            $a->assocvideos = array();
+            $a->userpicture = $OUTPUT->user_picture($a);
+        });
+
+        $assocdata = array();
+
+        $groupid = groups_get_activity_group($this->cm, true);
+        $groupmembers = groups_get_members($groupid, 'u.id');
+
+        $strtimings = array(
+            'before' => $this->timing_str('before'),
+            'after' => $this->timing_str('after'),
+        );
+        $strassociate = self::str('associate');
+        $disassocicon = new \pix_icon('t/delete', self::str('disassociate'));
+        ob_start();
+        foreach ($this->get_videos() as $v) {
+            $assocs = $this->get_video_associations($v->id);
+            $assocdata[$v->id] = $assocs;
+
+            if ($groupid && $assocs) {
+                $groupmemberassociated = false;
+                foreach ($assocs as $assoc) {
+                    if (!empty($groupmembers[$assoc->associationid])) {
+                        $groupmemberassociated = true;
+                        break;
+                    }
+                }
+                if (!$groupmemberassociated) {
+                    continue;
+                }
+            }
+
+            if ($filter == 'unassociated' && $assocs || $filter == 'associated' && !$assocs) {
+                continue;
+            }
+
+            $imgname = $v->filename;
+            $base = pathinfo($imgname, PATHINFO_FILENAME);
+            $thumbname = $base . self::THUMBEXT;
+
+            if ($v->tmpname == 'Youtube') {
+                $attr = array(
+                    'src' => $v->thumbnailname,
+                );
+            } else {
+                $attr = array(
+                    'src' => \moodle_url::make_pluginfile_url(
+                        $this->context->id,
+                        'mod_videoassessment',
+                        'video',
+                        0,
+                        $v->filepath,
+                        $thumbname
+                    ),
+                );
+            }
+            if ($thumbsize) {
+                $attr['width'] = $thumbsize->width;
+                $attr['height'] = $thumbsize->height;
+            }
+            $thumb = \html_writer::empty_tag('img', $attr);
+
+            if ($v->tmpname == 'Youtube') {
+                $videocell = '<a href=' . $v->originalname . ' id=' . $v->id . ' class="video-thumb" >' . $thumb . '</a>';
+            } else {
+                $videocell = $OUTPUT->action_link(\moodle_url::make_pluginfile_url(
+                    $this->context->id, 'mod_videoassessment', 'video', 0,
+                    $v->filepath, $v->filename),
+                    $thumb, null, array('id' => 'video[' . $v->id . ']', 'class' => 'video-thumb'));
+            }
+            $assoccell = '';
+            $assocusers = array();
+            foreach ($assocs as $assoc) {
+                if (!isset($users[$assoc->associationid])) {
+                    continue;
+                }
+                $user = &$users[$assoc->associationid];
+                $assocdelurl = new \moodle_url(
+                    $url,
+                    array('action' => 'assocdel', 'userid' => $user->id, 'timing' => $assoc->timing, 'sesskey' => sesskey())
+                );
+                $assocusers[$user->id] = $user->userpicture . $user->fullname
+                    . $OUTPUT->action_icon($assocdelurl, $disassocicon);
+                $user->assocvideos[] = (int) $v->id;
+            }
+            \core_collator::asort($assocusers);
+            $assoccell .= implode(\html_writer::empty_tag('br'), $assocusers);
+            $assoccell .= \html_writer::empty_tag('br');
+            $opts = array();
+            foreach ($users as $candidate) {
+                if ($groupid && empty($groupmembers[$candidate->id])) {
+                    continue;
+                }
+                if (empty($assocusers[$candidate->id])) {
+                    $opts[$candidate->id] = fullname($candidate);
+                }
+            }
+            $assoccell .= \html_writer::start_tag(
+                'form',
+                array('method' => 'get', 'action' => $url->out_omit_querystring(true))
+            );
+            $assoccell .= \html_writer::input_hidden_params(
+                new \moodle_url($url, array('sesskey' => sesskey(), 'action' => 'assocadd', 'videoid' => $v->id, 'timing' => 'before'))
+            );
+            $assoccell .= \html_writer::select($opts, 'userid');
+            $assoccell .= \html_writer::empty_tag('input', array('type' => 'submit', 'value' => $strassociate));
+            $assoccell .= \html_writer::end_tag('form');
+
+            $opcell = $this->output->action_link(
+                $this->get_view_url(
+                    'videodel',
+                    array('videoid' => $v->id, 'filter' => $filter, 'sesskey' => sesskey())
+                ),
+                $this->output->pix_icon('t/delete', '') . ' ' . self::str('deletevideo'),
+                null,
+                array('class' => 'videodel')
+            );
+
+            $row = array(
+                $videocell,
+                $v->originalname,
+                userdate($v->timecreated),
+                $assoccell,
+                $opcell,
+            );
+            $table->add_data($row);
+        }
+
+        $table->finish_output();
+        $o .= ob_get_contents();
+        ob_end_clean();
+
+        $o .= \html_writer::tag('div', '', array('id' => 'assocpanel'));
+
+        $form = new form\video_assoc(null, (object) array(
+            'cmid' => $this->cm->id,
+        ));
+        ob_start();
+        $form->display();
+        $o .= ob_get_contents();
+        ob_end_clean();
+
+        $groupusers = $this->get_students();
+        array_walk($groupusers, function ($groupuser) use ($users) {
+            $user = $users[$groupuser->id];
+            $groupuser->fullname = $user->fullname;
+            $groupuser->assocvideos = $user->assocvideos;
+            $groupuser->userpicture = $user->userpicture;
+        });
+
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'videosInit', array($groupusers, $assocdata));
+        $PAGE->requires->strings_for_js(array(
+            'liststudents',
+            'unassociated',
+            'associated',
+            'before',
+            'after',
+            'saveassociations',
+        ), 'videoassessment');
+        $PAGE->requires->strings_for_js(array('all'), 'moodle');
+
+        return $o;
+    }
+
+    /**
+     * Delete a video file and its associations, then redirect to videos list.
+     *
+     * Reads `videoid` from request, removes stored files and DB records, then
+     * redirects back to the videos management page with current filter.
+     *
+     * @return void
+     */
+    private function delete_video() {
+        global $DB;
+
+        $videoid = required_param('videoid', PARAM_INT);
+
+        $video = $DB->get_record('videoassessment_videos', array('id' => $videoid));
+
+        $fs = get_file_storage();
+
+        $file = $fs->get_file($this->context->id, 'mod_videoassessment', 'video', 0, $video->filepath, $video->filename);
+        if ($file) {
+            $file->delete();
+        }
+
+        $file = $fs->get_file($this->context->id, 'mod_videoassessment', 'video', 0, $video->filepath, $video->thumbnailname);
+        if ($file) {
+            $file->delete();
+        }
+
+        $DB->delete_records('videoassessment_videos', array('id' => $videoid));
+        $DB->delete_records('videoassessment_video_assocs', array('videoid' => $videoid));
+
+        $this->view_redirect(
+            'videos',
+            array('filter' => optional_param('filter', 'unassociated', PARAM_ALPHA))
+        );
+    }
+
+    /**
+     * Delete a single video by id provided in the request.
+     *
+     * Uses the `videoid` request param, deletes the stored file through the
+     * `video` object API and removes DB records, then redirects to current view.
+     *
+     * @return void
+     */
+    public function delete_one_video_by_id() {
+        global $DB;
+        $videoid = required_param('videoid', PARAM_INT);
+
+        $video = video::from_id($this->context, $videoid);
+        $video->delete_file();
+
+        $DB->delete_records('videoassessment_videos', array('id' => $videoid));
+        $DB->delete_records('videoassessment_video_assocs', array('videoid' => $videoid));
+
+        $this->view_redirect();
+    }
+
+    /**
+     * Delete a single video by id.
+     *
+     * @param int $videoid Video identifier
+     * @return void
+     */
+    public function delete_one_video($videoid) {
+        global $DB;
+
+        $video = video::from_id($this->context, $videoid);
+        $video->delete_file();
+
+        $DB->delete_records('videoassessment_videos', array('id' => $videoid));
+        $DB->delete_records('videoassessment_video_assocs', array('videoid' => $videoid));
+    }
+
+    /**
+     * Fetch all videos for this activity instance.
+     *
+     * @return array List of video records
+     */
+    public function get_videos() {
+        global $DB;
+
+        return $DB->get_records('videoassessment_videos', array('videoassessment' => $this->instance));
+    }
+
+    /**
+     * Fetch association records for a given video.
+     *
+     * @param int $videoid Video identifier
+     * @return array List of association records
+     */
+    public function get_video_associations($videoid) {
+        global $DB;
+
+        return $DB->get_records('videoassessment_video_assocs', array('videoid' => $videoid));
+    }
+
+    /**
+     * Get the associated video object for a user and timing.
+     *
+     * @param int $userid User id whose video is requested
+     * @param string $timing The timing key, e.g. 'before' or 'after'
+     * @return video|null Video object or null if none exists
+     */
+    public function get_associated_video($userid, $timing) {
+        global $DB;
+        if ($assocs = $DB->get_records('videoassessment_video_assocs', array(
+            'videoassessment' => $this->instance,
+            'timing' => $timing,
+            'associationid' => $userid,
+        ))) {
+            $assoc = reset($assocs);
+
+            $data = $DB->get_record('videoassessment_videos', array('id' => $assoc->videoid));
+            if (!$data) {
+                return null;
+            }
+
+            $video = new video($this->context, $data);
+
+            if (isset($video->file) || $data->tmpname == 'Youtube') {
+                return $video;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Determine grader type for the current user relative to graded user.
+     *
+     * @param int $gradeduserid The user being graded
+     * @param string|null $gradertype Optional override type
+     * @return string One of 'teacher', 'self', 'peer', or 'class'
+     */
+    public function get_grader_type($gradeduserid, $gradertype = null) {
+        global $USER;
+
+        if (!empty($gradertype)) {
+            return $gradertype;
+        }
+
+        $peers = $this->get_peers($USER->id);
+
+        if (has_capability('mod/videoassessment:grade', $this->context)) {
+            return 'teacher';
+        } else if ($gradeduserid == $USER->id) {
+            return 'self';
+        } else if (in_array($gradeduserid, $peers)) {
+            return 'peer';
+        }
+        return 'class';
+    }
+
+    /**
+     * Parse thumbnail size from ffmpeg thumbnail command configuration.
+     *
+     * @return \stdClass|null Object with width and height, or null if not set
+     */
+    private static function get_thumbnail_size() {
+        global $CFG;
+
+        if (preg_match('/(\d+)x(\d+)/', $CFG->videoassessment_ffmpegthumbnailcommand, $m)) {
+            $size = new \stdClass();
+            $size->width = $m[1];
+            $size->height = $m[2];
+
+            return $size;
+        }
+
+        return null;
+    }
+
+    /**
+     * Associate a video with a user and timing.
+     *
+     * Replaces any existing association for the user and timing, then inserts
+     * a new association record.
+     *
+     * @param int $userid User id to associate
+     * @param string $timing Timing key, e.g. 'before' or 'after'
+     * @param int $videoid Video identifier
+     * @param int $associationtype Association type (default 1)
+     * @return void
+     */
+    private function associate_video($userid, $timing, $videoid, $associationtype = 1) {
+        global $DB;
+
+        $this->disassociate_video($userid, $timing);
+        $DB->insert_record('videoassessment_video_assocs', array(
+            'videoassessment' => $this->instance,
+            'videoid' => $videoid,
+            'associationtype' => $associationtype,
+            'timing' => $timing,
+            'associationid' => $userid,
+            'timemodified' => time(),
+        ));
+    }
+
+    /**
+     * Remove any video association for a user and timing.
+     *
+     * @param int $userid User id
+     * @param string $timing Timing key
+     * @return void
+     */
+    private function disassociate_video($userid, $timing) {
+        global $DB;
+
+        $DB->delete_records('videoassessment_video_assocs', array(
+            'videoassessment' => $this->instance,
+            'timing' => $timing,
+            'associationid' => $userid,
+        ));
+    }
+
+    /**
+     * Assign random peers to users either per group or course-wide.
+     *
+     * Reads required params, computes mappings, replaces peer records, and
+     * redirects back to the peers page.
+     *
+     * @return void
+     */
+    private function assign_random_peers() {
+        global $DB;
+
+        $peermode = required_param('peermode', PARAM_ALPHA);
+        if ($peermode == 'group') {
+            $groups = groups_get_all_groups($this->course->id);
+            $groupids = array_keys($groups);
+        } else {
+            $groupids = array(0);
+        }
+
+        foreach ($groupids as $groupid) {
+            $users = get_enrolled_users($this->context, 'mod/videoassessment:submit', $groupid, 'u.id');
+            $userids = array_keys($users);
+
+            $mappings = $this->get_random_peers_for_users($userids, $this->va->usedpeers);
+
+            foreach ($mappings as $id => $peers) {
+                $DB->delete_records(
+                    'videoassessment_peers',
+                    array('videoassessment' => $this->instance, 'userid' => $id)
+                );
+
+                foreach ($peers as $peer) {
+                    $row = new \stdClass();
+                    $row->videoassessment = $this->instance;
+                    $row->userid = $id;
+                    $row->peerid = $peer;
+                    $DB->insert_record('videoassessment_peers', $row);
+                }
+            }
+        }
+
+        $this->view_redirect('peers');
+    }
+
+    /**
+     * Add or update a single user-video association via request parameters.
+     *
+     * Requires teacher role. Updates existing association or inserts new, then
+     * redirects back to videos management view.
+     *
+     * @return void
+     */
+    private function view_assoc_add() {
+        global $DB;
+
+        $this->teacher_only();
+        $videoid = required_param('videoid', PARAM_INT);
+        $cond = array(
+            'videoassessment' => $this->instance,
+            'associationtype' => 1,
+            'associationid' => required_param('userid', PARAM_INT),
+            'timing' => required_param('timing', PARAM_ALPHA),
+        );
+        if (!empty($cond['associationid']) && !empty($cond['timing'])) {
+            if ($id = $DB->get_field('videoassessment_video_assocs', 'id', $cond)) {
+                $DB->set_field('videoassessment_video_assocs', 'videoid', $videoid, array('id' => $id));
+            } else {
+                $record = $cond + array('videoid' => $videoid);
+                $DB->insert_record('videoassessment_video_assocs', (object) $record);
+            }
+        }
+        $this->view_redirect(
+            'videos',
+            array('filter' => optional_param('filter', 'unassociated', PARAM_ALPHA))
+        );
+    }
+
+    /**
+     * Delete a user-video association via request parameters.
+     *
+     * Requires teacher role. Removes the association and redirects back to
+     * videos management view.
+     *
+     * @return void
+     */
+    private function view_assoc_delete() {
+        global $DB;
+
+        $this->teacher_only();
+        $cond = array(
+            'videoassessment' => $this->instance,
+            'associationtype' => 1,
+            'associationid' => required_param('userid', PARAM_INT),
+            'timing' => required_param('timing', PARAM_ALPHA),
+        );
+        $DB->delete_records('videoassessment_video_assocs', $cond);
+        $this->view_redirect(
+            'videos',
+            array('filter' => optional_param('filter', 'unassociated', PARAM_ALPHA))
+        );
+    }
+
+    /**
+     * Bulk associate or disassociate a video with multiple users.
+     *
+     * Processes form submission for bulk operations and redirects back to
+     * videos management view.
+     *
+     * @return void
+     */
+    private function view_video_associate() {
+        global $DB;
+
+        $this->teacher_only();
+
+        $assocform = new form\video_assoc();
+        $data = $assocform->get_data();
+
+        $assoc = (object) array(
+            'videoassessment' => $this->instance,
+            'videoid' => $data->videoid,
+            'associationtype' => 1,
+            'timing' => $data->timing,
+        );
+        $ids = json_decode($data->assocdata);
+        foreach ($ids as $item) {
+            $assoc->associationid = $item[0];
+            $cond = array(
+                'videoassessment' => $this->instance,
+                'associationid' => $assoc->associationid,
+                'videoid' => $data->videoid,
+                'timing' => $data->timing,
+            );
+            if ($item[1]) {
+                if (!$DB->record_exists('videoassessment_video_assocs', $cond)) {
+                    $DB->insert_record('videoassessment_video_assocs', $assoc);
+                }
+            } else {
+                $DB->delete_records('videoassessment_video_assocs', $cond);
+            }
+        }
+
+        $this->view_redirect('videos');
+    }
+
+    /**
+     * Render the default landing view for the activity.
+     *
+     * Shows grade tables for teachers or student-facing assessment summaries
+     * including training status and video preview area.
+     *
+     * @return string Rendered HTML for the main view
+     */
+    private function view_main() {
+        global $OUTPUT, $PAGE, $DB, $USER;
+
+        $o = '';
+        if ($this->cm->showdescription == 1) {
+            $o .= $this->va->intro;
+        }
+        $time = time();
+        $gradetable = new grade_table($this);
+        if ($this->is_teacher()) {
+            $o .= $gradetable->print_teacher_grade_table();
+        } else {
+            $trainingpassed = $DB->get_field('videoassessment_aggregation', 'passtraining', array(
+                'videoassessment' => $this->va->id,
+                'userid' => $USER->id,
+            ));
+
+            if (!$this->va->training || $trainingpassed == 1) {
+                if ($this->va->class) {
+                    $o .= $this->output->heading(self::str('classassessments'));
+                    $o .= $gradetable->print_class_grade_table();
+                }
+                $o .= $this->output->heading(self::str('selfassessments'));
+                $o .= $gradetable->print_self_grade_table();
+                $o .= $this->output->heading(self::str('peerassessments'));
+                $o .= $gradetable->print_peer_grade_table();
+            } else {
+                $o .= $this->output->heading(self::str('trainingpretest'));
+                $o .= $gradetable->print_training_grade_table();
+            }
+        }
+
+        $o .= \html_writer::tag('div', '', array('id' => 'videopreview'));
+
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'mainInit', array($this->cm->id));
+
+        if ($this->is_teacher()) {
+            $o .= $OUTPUT->box_start();
+            $url = new \moodle_url(
+                '/mod/videoassessment/print.php',
+                array('id' => $this->cm->id, 'action' => 'report')
+            );
+            $o .= $OUTPUT->action_link(
+                $url,
+                self::str('printrubrics'),
+                new \popup_action(
+                    'click',
+                    $url,
+                    'popup',
+                    array('width' => 800, 'height' => 700, 'menubar' => true)
+                )
+            );
+            $o .= \html_writer::empty_tag('br');
+            $o .= $OUTPUT->action_link(
+                new \moodle_url($this->viewurl, array('action' => 'downloadxls')),
+                self::str('downloadexcel')
+            );
+            $o .= $OUTPUT->box_end();
+        }
+        $o .= $this->output->render_mod_videoassessment_info_status($this->va);
+
+        return $o;
+    }
+
+    /**
+     * Render the assessment form and handle submissions.
+     *
+     * Prepares advanced grading instances for each timing, processes submitted
+     * grades and comments, updates grade records, and triggers notifications.
+     *
+     * @return string Rendered HTML for the assess view
+     */
+    private function view_assess() {
+        global $DB, $PAGE, $USER, $OUTPUT;
+
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'mainInit', array($this->cm->id));
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'assessInit');
+        $PAGE->requires->js_call_amd('mod_videoassessment/assess', 'videoassessmentAssess', array());
+        $o = '';
+
+        $user = $DB->get_record('user', array('id' => optional_param('userid', 0, PARAM_INT)));
+
+        $gradertype = optional_param('gradertype', '', PARAM_ALPHA);
+
+        if ($gradertype == 'training' && $USER->id != $user->id && !$this->is_teacher()) {
+            $this->view_redirect();
+        }
+
+        if ($gradertype != 'class' && $gradertype != 'training') {
+            $gradertype = $this->get_grader_type($user->id);
+        }
+
+        $passtraining = $DB->get_field('videoassessment_aggregation', 'passtraining', array(
+            'videoassessment' => $this->va->id,
+            'userid' => $user->id,
+        ));
+
+        $rubricspassed = array();
+
+        if ($gradertype == 'training' && !$this->is_teacher()) {
+            if ($passtraining || !$this->va->training) {
+                $this->view_redirect();
+            } else {
+                $gradingarea = 'beforetraining';
+                $rubric = new rubric($this, array($gradingarea));
+                $controller = $rubric->get_available_controller($gradingarea);
+
+                $studentid = $USER->id;
+                $teacherid = null;
+
+                $teachers = $DB->get_records_sql('
+                    SELECT gi.grader
+                    FROM {videoassessment_grade_items} gi
+                    WHERE gi.type = :type AND videoassessment = :videoassessment AND gi.gradeduser = gi.grader
+                    ORDER BY gi.id DESC
+                ',
+                    array(
+                        'type' => $gradingarea,
+                        'videoassessment' => $this->va->id,
+                    )
+                );
+
+                if (!empty($teachers)) {
+                    foreach ($teachers as $teacher) {
+                        if ($this->is_teacher($teacher->grader)) {
+                            $teacherid = $teacher->grader;
+                            break;
+                        }
+                    }
+                }
+
+                $itemid = null;
+                $itemid = $this->get_grade_item($gradingarea, $user->id, $studentid);
+                $instanceid = optional_param('advancedgradinginstanceid', 0, PARAM_INT);
+
+                $studentinstance = $controller->get_or_create_instance($instanceid, $studentid, $itemid)->get_current_instance();
+
+                $studentfilling = array();
+                if (!empty($studentinstance)) {
+                    $studentfilling = $studentinstance->get_rubric_filling();
+                }
+
+                $teacherfilling = array();
+                if ($teacherid) {
+                    $itemid = $this->get_grade_item($gradingarea, $teacherid, $teacherid);
+                    $teacherinstance = $controller->get_or_create_instance($instanceid, $teacherid, $itemid);
+                    $teachercurrentinstance = $teacherinstance->get_current_instance();
+
+                    if (!empty($teachercurrentinstance)) {
+                        $teacherfilling = $teacherinstance->get_rubric_filling();
+                    }
+                }
+
+                if (!empty($teacherfilling)) {
+                    $definition = $controller->get_definition();
+
+                    $resulttable = '';
+                    $resulttable .= \html_writer::start_tag('table', array('id' => 'training-result-table-render'));
+
+                    $result = $this->get_training_result_table($definition, $studentfilling, $teacherfilling);
+                    $resulttable .= $result[0];
+                    $rubricspassed = $result[2];
+
+                    $resulttable .= \html_writer::end_tag('table');
+                    $o .= $resulttable;
+                }
+
+            }
+        }
+
+        $mformdata = (object) array(
+            'va' => $this,
+            'cm' => $this->cm,
+            'userid' => optional_param('userid', 0, PARAM_INT),
+            'user' => $user,
+            'gradingdisabled' => false,
+            'gradertype' => $gradertype,
+            'rubricspassed' => $rubricspassed,
+        );
+
+        $gradingareas = array('before' . $gradertype);
+        if ($this->get_associated_video($user->id, 'after')) {
+            $gradingareas[] = 'after' . $gradertype;
+        }
+        $rubric = new rubric($this, $gradingareas);
+
+        foreach ($this->timings as $timing) {
+            $gradingarea = $timing . $gradertype;
+            $itemid = null;
+            $itemid = $this->get_grade_item($gradingarea, $user->id);
+            if ($controller = $rubric->get_available_controller($gradingarea)) {
+
+                $instanceid = optional_param('advancedgradinginstanceid', 0, PARAM_INT);
+                if (!isset($mformdata->advancedgradinginstance)) {
+                    $mformdata->advancedgradinginstance = new \stdClass();
+                }
+                $mformdata->advancedgradinginstance->$timing = $controller->get_or_create_instance(
+                    $instanceid,
+                    $USER->id,
+                    $itemid
+                );
+            }
+
+            $mformdata->{'grade' . $timing} = $DB->get_record(
+                self::TABLE_GRADES,
+                array(
+                    'gradeitem' => $itemid,
+                )
+            );
+        }
+
+        $form = new form\assess('', $mformdata, 'post', '', array(
+            'class' => 'gradingform',
+        ));
+
+        if ($form->is_cancelled()) {
+            $this->view_redirect();
+        } else if ($data = $form->get_data($gradertype)) {
+            $gradinginstance = $form->use_advanced_grading();
+            foreach ($this->timings as $timing) {
+                if (!empty($gradinginstance->$timing)) {
+                    $gradingarea = $timing . $this->get_grader_type($data->userid, $gradertype);
+                    $_POST['xgrade' . $timing] = $gradinginstance->$timing->submit_and_get_grade(
+                        $data->{'advancedgrading' . $timing},
+                        $this->get_grade_item($gradingarea, $data->userid)
+                    );
+                }
+            }
+            $gradertype = $this->get_grader_type($data->userid, $gradertype);
+            foreach ($this->timings as $timing) {
+                $gradingarea = $timing . $gradertype;
+                $itemid = $this->get_grade_item($gradingarea, $data->userid);
+
+                if (
+                    !($grade = $DB->get_record(
+                        'videoassessment_grades',
+                        array(
+                            'gradeitem' => $itemid,
+                        )
+                    ))
+                ) {
+                    $grade = new \stdClass();
+                    $grade->videoassessment = $this->instance;
+                    $grade->gradeitem = $itemid;
+                    $grade->id = $DB->insert_record('videoassessment_grades', $grade);
+                }
+                if (empty($data->isnotifystudent)) {
+                    $grade->isnotifystudent = 0;
+                } else {
+                    $grade->isnotifystudent = $data->isnotifystudent;
+                }
+
+                $grade->grade = $data->{'xgrade' . $timing};
+                if (isset($data->{'submissioncomment' . $timing})) {
+                    $grade->submissioncomment = $data->{'submissioncomment' . $timing}['text'];
+                    $grade->submissioncommentformat = $data->{'submissioncomment' . $timing}['format'];
+                }
+                $grade->timemarked = time();
+                $DB->update_record('videoassessment_grades', $grade);
+            }
+
+            $this->aggregate_grades($user->id);
+
+            // adtis
+            $ismailsent = 0;
+            $videoassessment = $DB->get_record('videoassessment', array('id' => $this->va->id));
+            if ($videoassessment->teachercommentnotification == 1 && $grade->isnotifystudent == 1) {
+                if (
+                    !($this->is_graded_by_current_user($user->id, $timing . $gradertype) && $videoassessment->isfirstassessmentbyteacher == 1 && 'teacher' == $gradertype) &&
+                    !($this->is_graded_by_current_user($user->id, $timing . $gradertype) && $videoassessment->isfirstassessmentbystudent == 1 && 'peer' == $gradertype)
+                    || ($this->is_graded_by_current_user($user->id, $timing . $gradertype) && $videoassessment->isadditionalassessment == 1 && 'teacher' == $gradertype)
+                ) {
+
+                    if ('teacher' == $gradertype) {
+                        $mailtemplate = $videoassessment->teachernotificationtemplate;
+                    } else {
+                        $mailtemplate = $videoassessment->peertnotificationtemplate;
+                    }
+
+                    $url = new \moodle_url(
+                        $this->viewurl,
+                        array('action' => 'report', 'userid' => $user->id)
+                    );
+                    $templatearray = array(
+                        "[[student name]]" => $user->firstname . ' ' . $user->lastname,
+                        "[[insert assignment name]]" => $videoassessment->name,
+                        "[[insert current date]]" => date("Y-m-d H:i:s"),
+                        "[[insert link to student page to view assessment]]" => $url->out(false),
+                        "[[teacher email address]]" => $USER->email,
+                        "[[teacher name]]" => $USER->firstname . ' ' . $USER->lastname,
+                    );
+
+                    foreach ($templatearray as $item => $template) {
+                        $mailtemplate = str_replace($item, $template, $mailtemplate);
+                    }
+                    $quickmailresult = false;
+                    $registeredemailresult = false;
+                    if ($videoassessment->isregisteredemail == 1) {
+                        $registeredemailresult = email_to_user($user, $USER, "", $mailtemplate);
+                    }
+                    if ($videoassessment->ismobilequickmail == 1) {
+                        // NOTE: The Quickmail JPN block is optional.
+                        // Only attempt to use its user table if the quickmailjpn plugin is installed
+                        $dbman = $DB->get_manager();
+                        if ($dbman->table_exists('block_quickmailjpn_users')) {
+                            $quickmail = $DB->get_record('block_quickmailjpn_users', array('userid' => $user->id));
+                            if (!empty($quickmail)) {
+                                $mobileuser = $user;
+                                $mobileuser->email = $quickmail->mobileemail;
+                                $quickmailresult = email_to_user($mobileuser, $USER, "", $mailtemplate);
+                            }
+                        }
+                    }
+                    if ($registeredemailresult || $quickmailresult) {
+                        $ismailsent = 1;
+                    }
+                }
+            }
+
+            if ($gradertype == 'training' && !$this->is_teacher()) {
+                $this->view_redirect('trainingresult', array('userid' => $user->id));
+            } else {
+                $this->view_redirect("", array('ismailsent' => $ismailsent));
+            }
+        }
+
+        $o .= \html_writer::start_tag('div', array('class' => 'clearfix'));
+        if ($gradertype != 'class') {
+            $o .= \html_writer::start_tag('div', array('class' => 'assess-form-videos'));
+            $mobile = self::uses_mobile_upload();
+
+            if ($gradertype == 'training') {
+                $data = $DB->get_record('videoassessment_videos', array('id' => $this->va->trainingvideoid));
+                if (!empty($data)) {
+                    if ($video = new video($this->context, $data)) {
+                        $o .= \html_writer::start_tag('div', array('class' => 'video-wrap'));
+                        $o .= $this->output->render($video);
+                        $o .= \html_writer::end_tag('div');
+                    }
+                }
+            } else {
+                foreach ($this->timings as $timing) {
+                    if ($video = $this->get_associated_video($user->id, $timing)) {
+                        $o .= \html_writer::start_tag('div', array('class' => 'video-wrap'));
+                        $o .= $this->output->render($video);
+                        $o .= \html_writer::end_tag('div');
+                    }
+                }
+            }
+            $o .= \html_writer::end_tag('div');
+        }
+
+        ob_start();
+        $form->display();
+        $o .= ob_get_contents();
+        ob_end_clean();
+
+        $o .= \html_writer::end_tag('div');
+
+        return $o;
+    }
+
+    /**
+     * Render the training result table for the current or selected user.
+     *
+     * Compares student rubric filling against teacher's and displays pass/fail
+     * per criterion with summary.
+     *
+     * @return string Rendered HTML for the training result view
+     */
+    private function view_result() {
+        global $DB, $USER, $PAGE, $CFG;
+
+        $gradingarea = 'beforetraining';
+        $user = $DB->get_record('user', array('id' => optional_param('userid', 0, PARAM_INT)));
+
+        if ($this->is_teacher()) {
+            $studentid = $user->id;
+            $teacherid = $USER->id;
+        } else {
+            $studentid = $USER->id;
+            $teacherid = null;
+
+            $teachers = $DB->get_records_sql('
+                    SELECT gi.grader
+                    FROM {videoassessment_grade_items} gi
+                    WHERE gi.type = :type AND videoassessment = :videoassessment AND gi.gradeduser = gi.grader
+                    ORDER BY gi.id DESC
+                ',
+                array(
+                    'type' => $gradingarea,
+                    'videoassessment' => $this->va->id,
+                )
+            );
+
+            if (!empty($teachers)) {
+                foreach ($teachers as $teacher) {
+                    if ($this->is_teacher($teacher->grader)) {
+                        $teacherid = $teacher->grader;
+                        break;
+                    }
+                }
+            }
+        }
+
+        $rubric = new rubric($this, array($gradingarea));
+        $o = '';
+
+        if (!empty($rubric)) {
+            $controller = $rubric->get_available_controller($gradingarea);
+
+            $o .= \html_writer::start_tag('div', array('class' => 'clearfix'));
+            $o .= \html_writer::start_tag('div', array('class' => 'assess-form-videos'));
+
+            $data = $DB->get_record('videoassessment_videos', array('id' => $this->va->trainingvideoid));
+            if (!empty($data)) {
+                if ($video = new video($this->context, $data)) {
+                    $o .= \html_writer::start_tag('div', array('class' => 'video-wrap'));
+                    $o .= $this->output->render($video);
+                    $o .= \html_writer::end_tag('div');
+                }
+            }
+
+            $o .= \html_writer::end_tag('div');
+            $o .= \html_writer::start_tag('div', array('id' => 'training-result-wrap'));
+
+            $o .= \html_writer::start_tag('h2');
+            $o .= self::str('results');
+            $o .= \html_writer::end_tag('h2');
+
+            if (!empty($controller)) {
+                $itemid = null;
+                $itemid = $this->get_grade_item($gradingarea, $user->id, $studentid);
+                $instanceid = optional_param('advancedgradinginstanceid', 0, PARAM_INT);
+
+                $studentinstance = $controller->get_or_create_instance($instanceid, $studentid, $itemid)->get_current_instance();
+                $archiveinstances = $this->get_archive_instances($controller, $itemid);
+                $historyfillings = array();
+
+                if (!empty($archiveinstances)) {
+                    foreach ($archiveinstances as $instance) {
+                        $fillings = $instance->get_rubric_filling();
+
+                        foreach ($fillings['criteria'] as $rid => $filling) {
+                            if (!isset($historyfillings[$rid])) {
+                                $historyfillings[$rid] = array();
+                            }
+
+                            if (!in_array($filling['levelid'], $historyfillings[$rid])) {
+                                $historyfillings[$rid][] = $filling['levelid'];
+                            }
+                        }
+                    }
+                }
+
+                $studentfilling = array();
+                if (!empty($studentinstance)) {
+                    $studentfilling = $studentinstance->get_rubric_filling();
+                }
+
+                $teacherfilling = array();
+                if ($teacherid) {
+                    $itemid = $this->get_grade_item($gradingarea, $teacherid, $teacherid);
+                    $teacherinstance = $controller->get_or_create_instance($instanceid, $teacherid, $itemid);
+                    $teachercurrentinstance = $teacherinstance->get_current_instance();
+
+                    if (!empty($teachercurrentinstance)) {
+                        $teacherfilling = $teacherinstance->get_rubric_filling();
+                    }
+                }
+
+                $definition = $controller->get_definition();
+
+                $o .= \html_writer::start_tag('div', array('id' => 'training-desc'));
+                $o .= \html_writer::start_tag('h5');
+                $o .= str_replace('xx', $this->va->accepteddifference, $this->va->trainingdesc);
+                $o .= \html_writer::end_tag('h5');
+                $o .= \html_writer::end_tag('div');
+
+                $o .= \html_writer::start_tag('table', array('id' => 'training-result-table'));
+
+                $result = $this->get_training_result_table($definition, $studentfilling, $teacherfilling, $historyfillings);
+                $o .= $result[0];
+                $passed = $result[1];
+
+                $o .= \html_writer::end_tag('table');
+            }
+        }
+
+        $agg = $DB->get_record('videoassessment_aggregation', array(
+            'videoassessment' => $this->va->id,
+            'userid' => $user->id,
+        ));
+
+        $o .= \html_writer::start_tag('div', array('class' => 'result-notice'));
+
+        if (!$agg->passtraining && $passed && !empty($teacherfilling) && !empty($studentfilling)) {
+            $agg->passtraining = 1;
+
+            $DB->update_record('videoassessment_aggregation', $agg);
+        }
+
+        if (!$this->is_teacher()) {
+            if ($agg->passtraining) {
+                $o .= get_string(
+                    'passednotice',
+                    self::VA,
+                    '<a class="button-notice" href="' .new \moodle_url('/mod/videoassessment/view.php',
+                    array('id' => $this->cm->id)) . '">' . self::str('selfpeer') . '</a>',
+                );
+            } else {
+                $a = new \stdClass();
+                $a->accepteddifference = $this->va->accepteddifference;
+                $a->button = '<a class="button-notice" href="'
+                    . new \moodle_url('/mod/videoassessment/view.php', array('id' => $this->cm->id, 'action' => 'assess', 'userid' => $user->id, 'gradertype' => 'training'))
+                    . '">' . self::str('tryagain') . '</a>';
+
+                $o .= self::str('failednotice', $a);
+            }
+        }
+
+        $o .= \html_writer::end_tag('div');
+        $o .= \html_writer::end_tag('div');
+        $o .= \html_writer::end_tag('div');
+
+        return $o;
+
+    }
+
+    /**
+     * Render the per-user assessment report view.
+     *
+     * Displays associated videos, grades, and rubric details for a user.
+     *
+     * @return string Rendered HTML for the report view
+     */
+    private function view_report() {
+        global $PAGE, $OUTPUT, $DB;
+
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'reportCombineRubrics');
+
+        $o = '';
+
+        $userid = optional_param('userid', 0, PARAM_INT);
+
+        $rubric = new rubric($this);
+
+        $gradingstatus = $this->get_grading_status($userid);
+        $usergrades = $this->get_aggregated_grades($userid);
+        $hideteacher = (object) array(
+            'before' => $usergrades->gradebeforeself == -1 && $this->va->delayedteachergrade && !$this->is_teacher(),
+            'after' => $usergrades->gradeafterself == -1 && $this->va->delayedteachergrade && !$this->is_teacher(),
+        );
+
+        $o .= \html_writer::start_tag('div', array('class' => 'report-rubrics'));
+        foreach ($this->timings as $timing) {
+            if (!$gradingstatus->$timing) {
+                continue;
+            }
+
+            $o .= $OUTPUT->heading($this->str('allscores'));
+            $timinggrades = array();
+            $rubrictextclass = 0;
+            $namerubrictextclass = '';
+            foreach ($this->gradertypes as $gradertype) {
+                if ($this->va->class && $gradertype == 'class' && !has_capability('mod/videoassessment:grade', $this->context)) {
+                    continue;
+                }
+
+                $gradingarea = $timing . $gradertype;
+                $o .= $OUTPUT->heading(
+                    self::str($timing) . ' - ' . self::str($gradertype),
+                    2,
+                    'main',
+                    'heading-' . $gradingarea
+                );
+                $gradinginfo = grade_get_grades(
+                    $this->course->id,
+                    'mod',
+                    'videoassessment',
+                    $this->instance,
+                    $userid
+                );
+                $o .= \html_writer::start_tag('div', array('id' => 'rubrics-' . $gradingarea));
+                if ($controller = $rubric->get_available_controller($gradingarea)) {
+                    $gradeitems = $this->get_grade_items($gradingarea, $userid);
+                    foreach ($gradeitems as $gradeitem) {
+                        $tmp = $controller->render_grade($PAGE, $gradeitem->id, $gradinginfo, '', false);
+                        if ($gradertype == 'teacher' && $hideteacher->$timing) {
+                            // hide teacher grade and comment
+                            $tmp = preg_replace('@class="(level[^"]+?)\s*checked"@', 'class="$1"', $tmp);
+                            $tmp = preg_replace('@<td class="remark">(.*?)</td>@us', '<td class="remark"></td>', $tmp);
+                        }
+                        $o .= $tmp;
+
+                        $timinggrades[] = \html_writer::tag('span', (int) $gradeitem->grade, array('class' => 'rubrictext-' . $gradertype));
+                    }
+                }
+                $o .= \html_writer::end_tag('div');
+            }
+
+            // adtis
+            $o .= $OUTPUT->heading("General Comments");
+            $o .= \html_writer::start_tag('div', array('class' => 'card  card-body'));
+            foreach ($this->gradertypes as $gradertype) {
+                if ($gradertype == 'training'
+                    || $gradertype == 'class'
+                    || ($this->va->class && $gradertype == 'class'
+                    && !has_capability('mod/videoassessment:grade', $this->context))) {
+                    continue;
+                }
+                $gradingarea = $timing . $gradertype;
+                $grades = $this->get_grade_items($gradingarea, $userid);
+                foreach ($grades as $item => $gradeitem) {
+                    if (empty($gradeitem->submissioncomment)) {
+                        break;
+                    }
+                    $comment = '<label class="submissioncomment">' . $gradeitem->submissioncomment . '</label>';
+                    if ($this->uses_mobile_upload()) {
+                        $commentbutton = '';
+                        if (strlen($gradeitem->submissioncomment) > 30) {
+                            $gradeitem->submissioncomment = substr($gradeitem->submissioncomment, 0, 10);
+                            $commentbutton = "<button type='button' class='commentbutton btn btn-secondary' id = '"
+                                . $gradeitem->id . "' cmid = '" . $this->va->id . "' userid = '" . $userid . "' timing = '" . $timing . "'><h2>...</h2></button>";
+                        }
+                        $comment = '<label class="mobile-submissioncomment">' . $gradeitem->submissioncomment . '</label>';
+                        $comment = $comment . $commentbutton;
+                    }
+
+                    if ($gradertype == "peer") {
+                        $lable = '<span class="blue box">Peer</span>';
+                    } else if ($gradertype == "teacher") {
+                        $lable = '<span class="green box">Teacher</span>';
+                    } else if ($gradertype == "self") {
+                        $lable = '<span class="red box">Self</span>';
+                    }
+
+                    $o .= $OUTPUT->heading($lable . $comment);
+                }
+            }
+            $o .= \html_writer::end_tag('div');
+
+            $gradeduser = $DB->get_record('user', array('id' => $userid));
+            $o .= \html_writer::start_tag('div', array('class' => 'comment comment-' . $gradertype))
+                . $OUTPUT->user_picture($gradeduser)
+                . ' ' . fullname($gradeduser)
+                . \html_writer::end_tag('div');
+
+            if ($timinggrades || $rubrictextclass > 0) {
+                $totalscore = ' ='
+                    . \html_writer::start_tag('div', array('class' => 'comment-grade'))
+                    . '<span class="comment-score-text">'
+                    . self::str('totalscore')
+                    . '</span><span class="comment-score">'
+                    . (int) $usergrades->{'grade' . $timing}
+                    . '</span>'
+                    . \html_writer::end_tag('div');
+                $selffairnessbonus = '<span  class="fairness">+</span> '
+                    . \html_writer::start_tag('div', array('class' => 'comment-grade fairness'))
+                    . '<span class="comment-score-text" >'
+                    . '+' . self::str('selffairnessbonus')
+                    . '</span><span class="comment-score">'
+                    . (int) $usergrades->selffairnessbonus
+                    . '</span>'
+                    . \html_writer::end_tag('div');
+                $fairnessbonus = '<span  class="fairness">+</span> '
+                    . \html_writer::start_tag('div', array('class' => 'comment-grade fairness'))
+                    . '<span class="comment-score-text" >'
+                    . '+' . self::str('peerfairnessbonus')
+                    . '</span><span class="comment-score">'
+                    . (int) $usergrades->fairnessbonus
+                    . '</span>'
+                    . \html_writer::end_tag('div');
+                $finalscore = ' = '
+                    . \html_writer::start_tag('div', array('class' => 'comment-grade'))
+                    . '<span class="comment-score-text">'
+                    . self::str('finalscore')
+                    . '</span><span class="comment-score">'
+                    . (int) $usergrades->finalscore . '</span>'
+                    . \html_writer::end_tag('div');
+                $o .= $OUTPUT->container(get_string('grade') . ': ' . implode(', ', $timinggrades) . $totalscore . $selffairnessbonus . $fairnessbonus . $finalscore, 'finalgrade');
+            }
+        }
+        $o .= \html_writer::end_tag('div');
+        $PAGE->requires->js_call_amd('mod_videoassessment/videoassessment', 'mobileshowallcomment', array());
+        return $o;
+    }
+
+    /**
+     * Render the publish view to generate and publish resources.
+     *
+     * Allows teachers to create resource links for published content.
+     *
+     * @global \core_renderer $OUTPUT
+     * @global \moodle_page $PAGE
+     * @global \moodle_database $DB
+     * @global \stdClass $USER
+     * @global \stdClass $CFG
+     * @return string Rendered HTML for the publish view
+     */
+    private function view_publish() {
+        global $CFG, $OUTPUT, $PAGE, $DB, $USER;
+        require_once($CFG->dirroot . '/mod/resource/lib.php');
+
+        $PAGE->requires->js_call_amd('mod_videoassessment/publish', 'mobilepublishvideo', []);
+
+        if ($CFG->version < self::MOODLE_VERSION_23) {
+            require_once($CFG->dirroot . '/mod/resource/locallib.php'); // resource_set_mainfile
+        }
+
+        $this->teacher_only();
+
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'initVideoLinks');
+        $PAGE->requires->js_call_amd('mod_videoassessment/module', 'initPublishVideos');
+
+        $o = '';
+
+        $o .= $OUTPUT->heading(self::str('publishvideostocourse'));
+
+        $videos = optional_param_array('videos', array(), PARAM_BOOL);
+
+        $form = new form\video_publish(null, (object)array('va' => $this, 'videos' => $videos));
+
+        if ($form->is_cancelled()) {
+            $this->view_redirect();
+        }
+
+        if ($data = $form->get_data() && $form->is_validated()) {
+            if ($data->course) {
+                $course = $DB->get_record('course', array('id' => $data->course));
+
+            } else {
+                require_capability('moodle/course:create', \context_coursecat::instance($data->category));
+
+                $course = (object) array(
+                    'category' => $data->category,
+                    'fullname' => trim($data->fullname),
+                    'shortname' => trim($data->shortname),
+                );
+                $course = create_course($course);
+
+                $context = \context_course::instance($course->id, MUST_EXIST);
+                if (!empty($CFG->creatornewroleid) && !is_viewing($context, null, 'moodle/role:assign') && !is_enrolled($context, null, 'moodle/role:assign')) {
+                    \enrol_try_internal_enrol($course->id, $USER->id, $CFG->creatornewroleid);
+                }
+            }
+
+            require_capability('moodle/course:manageactivities', \context_course::instance($course->id));
+
+            $moduleid = $DB->get_field('modules', 'id', array('name' => 'resource'));
+
+            $fs = get_file_storage();
+
+            $videos = required_param_array('videos', PARAM_BOOL);
+
+            foreach ($videos as $videoid => $value) {
+                $video = $DB->get_record('videoassessment_videos', array('id' => $videoid));
+                $file = $fs->get_file($this->context->id, 'mod_videoassessment', 'video', 0, $video->filepath, $video->filename);
+
+                if (empty($file)) {
+                    continue;
+                }
+
+                $assocs = $this->get_video_associations($videoid);
+                $assocnames = array();
+                foreach ($assocs as $assoc) {
+                    $user = $DB->get_record(
+                        'user',
+                        array('id' => $assoc->associationid),
+                        'id, lastname, firstname'
+                    );
+                    $assocnames[] = fullname($user);
+                }
+                $modulename = implode(', ', $assocnames);
+
+                // Add course module.
+                $cm = new \stdClass();
+                $cm->course = $course->id;
+                $cm->module = $moduleid;
+
+                $cm->id = add_course_module($cm);
+
+                // Add module option.
+                $resource = new \stdClass();
+                $resource->course = $course->id;
+                $resource->name = trim($data->prefix) . $modulename . trim($data->suffix);
+                $resource->display = 1;
+                $resource->timemodified = time();
+                $resource->coursemodule = $cm->id;
+                $resource->files = null;
+
+                $resource->id = resource_add_instance($resource, null);
+
+                $DB->set_field('course_modules', 'instance', $resource->id, array('id' => $cm->id));
+
+                // Add to course section.
+                if (!isset($data->section)) {
+                    $sectionnum = 1;
+                } else {
+                    $sectionnum = $DB->get_field('course_sections', 'section', array('id' => $data->section));
+                }
+                course_create_sections_if_missing($course, array($sectionnum));
+
+                $cm->coursemodule = $cm->id;
+                $cm->section = $sectionnum;
+
+                $sectionid = course_add_cm_to_section($course, $cm->id, $sectionnum);
+
+                $DB->set_field('course_modules', 'section', $sectionid, array('id' => $cm->id));
+
+                // Add file.
+                $newfile = array(
+                    'contextid' => \context_module::instance($cm->id)->id,
+                    'component' => 'mod_resource',
+                    'filearea' => 'content',
+                );
+                $fs->create_file_from_storedfile($newfile, $file);
+            }
+            rebuild_course_cache($course->id);
+
+            redirect(new \moodle_url('/course/view.php', array('id' => $course->id)));
+        }
+
+        ob_start();
+        $form->display();
+        $o .= ob_get_contents();
+        ob_end_clean();
+
+        $o .= \html_writer::tag('div', '', array('id' => 'videopreview'));
+
+        return $o;
+    }
+
+    /**
+     * Get grade items by explicit Video Assessment id.
+     *
+     * @param string $gradingarea Grading area key
+     * @param int $gradeduser User id being graded
+     * @param int $id Video Assessment instance id
+     * @return array List of grade item records
+     */
+    public static function get_grade_items_by_id($gradingarea, $gradeduser, $id) {
+        global $DB;
+
+        return $DB->get_records_sql('
+                SELECT gi.id, gi.grader, g.grade, g.submissioncomment, g.timemarked
+                    FROM {videoassessment_grade_items} gi
+                        LEFT JOIN {videoassessment_grades} g ON g.videoassessment = :va2
+                            AND g.gradeitem = gi.id
+                        JOIN {user} u ON u.id = gi.grader
+                    WHERE gi.videoassessment = :va AND gi.type = :type
+                        AND gi.gradeduser = :gradeduser
+                ',
+            array(
+                'va' => $id,
+                'va2' => $id,
+                'type' => $gradingarea,
+                'gradeduser' => $gradeduser,
+            )
+        );
+    }
+
+    /**
+     * Get grade items for a grading area and graded user.
+     *
+     * @param string $gradingarea Grading area key
+     * @param int $gradeduser User id being graded
+     * @return array List of grade item records
+     */
+    public function get_grade_items($gradingarea, $gradeduser) {
+        global $DB;
+
+        return $DB->get_records_sql('
+                SELECT gi.id, gi.grader, g.grade, g.submissioncomment, g.timemarked
+                    FROM {videoassessment_grade_items} gi
+                        LEFT JOIN {videoassessment_grades} g ON g.videoassessment = :va2
+                            AND g.gradeitem = gi.id
+                        JOIN {user} u ON u.id = gi.grader
+                    WHERE gi.videoassessment = :va AND gi.type = :type
+                        AND gi.gradeduser = :gradeduser
+                ',
+            array(
+                'va' => $this->instance,
+                'va2' => $this->instance,
+                'type' => $gradingarea,
+                'gradeduser' => $gradeduser,
+            )
+        );
+    }
+
+
+    /**
+     * Get or create a grade item id for the given area and users.
+     *
+     * @param string $gradingarea Grading area key
+     * @param int $gradeduser User id being graded
+     * @param int|null $grader Grader user id, defaults to current user
+     * @return int Grade item id
+     */
+    public function get_grade_item($gradingarea, $gradeduser, $grader = null) {
+        global $DB, $USER;
+
+        if (!$grader) {
+            $grader = $USER->id;
+        }
+
+        if (
+            $gradeitem = $DB->get_record('videoassessment_grade_items', array(
+                'videoassessment' => $this->instance,
+                'type' => $gradingarea,
+                'gradeduser' => $gradeduser,
+                'grader' => $grader,
+            ))
+        ) {
+            return $gradeitem->id;
+        }
+
+        $gradeitem = new \stdClass();
+        $gradeitem->videoassessment = $this->instance;
+        $gradeitem->type = $gradingarea;
+        $gradeitem->gradeduser = $gradeduser;
+        $gradeitem->grader = $grader;
+        $gradeitem->usedbypeermarking = 0;
+
+        return $DB->insert_record('videoassessment_grade_items', $gradeitem);
+    }
+
+    /**
+     * Fetch or build the aggregated grades object for a user.
+     *
+     * @param int $userid User id
+     * @return \stdClass Aggregated grades record
+     */
+    public function get_aggregated_grades($userid) {
+        global $DB;
+
+        if (
+            $grades = $DB->get_record(
+                'videoassessment_aggregation',
+                array('videoassessment' => $this->instance, 'userid' => $userid)
+            )
+        ) {
+            return $grades;
+        }
+
+        $grades = (object) array(
+            'videoassessment' => $this->instance,
+            'userid' => $userid,
+            'timemodified' => time(),
+            'gradebefore' => -1,
+            'gradeafter' => -1,
+            'gradebeforeteacher' => -1,
+            'gradebeforeself' => -1,
+            'gradebeforepeer' => -1,
+            'gradeafterteacher' => -1,
+            'gradeafterself' => -1,
+            'gradeafterpeer' => -1,
+            'selffairnessbonus' => 0,
+            'fairnessbonus' => 0,
+            'finalscore' => 0,
+        );
+        $grades->id = $DB->insert_record('videoassessment_aggregation', $grades);
+        return $grades;
+    }
+
+    /**
+     * Determine whether any grading has been completed for a user.
+     *
+     * @param int $userid User id
+     * @return boolean True if any grading area has a grade
+     */
+    public function is_user_graded($userid) {
+        $agg = $this->get_aggregated_grades($userid);
+        foreach ($this->gradingareas as $gradingarea) {
+            $prop = 'grade' . $gradingarea;
+            if ($agg->$prop != -1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get grading completion status per area for a user.
+     *
+     * @param int $userid User id
+     * @return \stdClass Object with area flags: submitted, graded, teachergraded
+     */
+    public function get_grading_status($userid) {
+        $agg = $this->get_aggregated_grades($userid);
+        $status = (object) array(
+            'any' => false,
+            'before' => false,
+            'after' => false,
+        );
+        foreach ($this->timings as $timing) {
+            foreach ($this->gradertypes as $gradertype) {
+                $gradingarea = $timing . $gradertype;
+                $prop = 'grade' . $gradingarea;
+                if ($agg->$prop != -1) {
+                    $status->any = $status->$timing = true;
+                    break;
+                }
+            }
+        }
+
+        return $status;
+    }
+
+    /**
+     * Aggregate grades for a user across grading areas and store results.
+     *
+     * @param int $userid User id
+     * @return void
+     */
+    public function aggregate_grades($userid) {
+        global $DB;
+
+        $agg = $this->get_aggregated_grades($userid);
+
+        foreach ($this->timings as $timing) {
+            foreach ($this->gradertypes as $gradingtype) {
+                $gradingarea = $timing . $gradingtype;
+
+                $sql = '
+                        SELECT AVG(g.grade)
+                        FROM {videoassessment_grades} g
+                            JOIN {videoassessment_grade_items} gi ON g.gradeitem = gi.id
+                        WHERE g.videoassessment = :va
+                            AND gi.gradeduser = :gradeduser AND gi.type = :type
+                        ';
+                $params = [
+                    'gradeduser' => $userid,
+                    'type' => $gradingarea,
+                    'va' => $this->instance,
+                ];
+                if ($grade = $DB->get_field_sql($sql, $params)) {
+                    $agg->{'grade' . $gradingarea} = $grade;
+                } else {
+                    $agg->{'grade' . $gradingarea} = -1;
+                }
+            }
+
+            $gradeself = ($agg->{'grade' . $timing . 'self'} < 0) ? 0 : $agg->{'grade' . $timing . 'self'};
+            $gradepeer = ($agg->{'grade' . $timing . 'peer'} < 0) ? 0 : $agg->{'grade' . $timing . 'peer'};
+            $gradeteacher = ($agg->{'grade' . $timing . 'teacher'} < 0) ? 0 : $agg->{'grade' . $timing . 'teacher'};
+            $gradeclass = ($agg->{'grade' . $timing . 'class'} < 0) ? 0 : $agg->{'grade' . $timing . 'class'};
+
+            $agg->{'grade' . $timing} = ($gradeteacher *
+                $this->va->ratingteacher +
+                $gradeself * $this->va->ratingself +
+                $gradepeer * $this->va->ratingpeer +
+                $gradeclass * $this->va->ratingclass) / ($this->va->ratingteacher +
+                $this->va->ratingself + $this->va->ratingpeer + $this->va->ratingclass);
+        }
+
+        // PostgreSQL does not perform implicit casting to INT, so you must cast explicitly.
+        foreach ($this->timings as $timing) {
+            foreach ($this->gradertypes as $gradingtype) {
+                $agg->{'grade' . $timing . $gradingtype} = (int) round($agg->{'grade' . $timing . $gradingtype});
+            }
+            $agg->{'grade' . $timing} = (int) round($agg->{'grade' . $timing});
+        }
+
+        if (!empty($agg->gradebefore)) {
+            $rawgrade = $agg->gradebefore;
+        } else {
+            $rawgrade = 0;
+        }
+
+        // Adtis
+        $va = $DB->get_record("videoassessment", array("id" => $this->instance));
+        if ($va->fairnessbonus == 1 && (optional_param('gradertype', null, PARAM_TEXT) == 'peer' || optional_param('gradertype', null, PARAM_TEXT) == 'teacher')) {
+            if ($gradeteacher > $gradepeer) {
+                $gradediff = $gradeteacher - $gradepeer;
+                $bonusscale = ($gradediff / $gradeteacher) * 100;
+            } else {
+                $gradediff = $gradepeer - $gradeteacher;
+                $bonusscale = ($gradediff / $gradeteacher) * 100;
+            }
+
+            $bonusscalearray = array();
+            for ($i = 1; $i <= 6; $i++) {
+                $bonusscalearray[$va->{'bonusscale' . $i}] = $va->{'bonus' . $i};
+            }
+
+            $keys = array_keys($bonusscalearray);
+
+            array_push($keys, $bonusscale);
+            sort($keys);
+            $item = array_search($bonusscale, $keys);
+
+            $total = $this->va->grade;
+            if ($total < 0) {
+                $total = 100;
+            }
+            if ($item + 1 == count($keys)) {
+                $bonuspercent = 0;
+            } else {
+                $key = $keys[$item + 1];
+                $bonuspercent = $bonusscalearray[$key];
+            }
+            $agg->bonusscale = $bonuspercent;
+
+            $sql = 'SELECT *
+                FROM {videoassessment_grade_items}  g
+                WHERE g.videoassessment = ? and g.grader = ? AND g.type like "%peer%" ';
+            $params = array($this->instance, $userid);
+            $result = $DB->get_record_sql($sql, $params);
+            if (empty($result)) {
+                $agg->fairnessbonus = 0;
+            } else {
+                $agg->fairnessbonus = (($bonuspercent / 100) * ((int) $va->bonuspercentage / 100) * $total);
+            }
+
+            $agg->finalscore =
+                ($agg->selffairnessbonus + $agg->fairnessbonus + $agg->gradebefore) > 100
+                ? 100 : ($agg->selffairnessbonus + $agg->fairnessbonus + $agg->gradebefore);
+        }
+
+        if ($va->selffairnessbonus == 1 && (optional_param('gradertype', null, PARAM_TEXT) == 'self' || optional_param('gradertype', null, PARAM_TEXT) == 'teacher')) {
+            if ($gradeteacher > $gradeself) {
+                $gradediff = $gradeteacher - $gradeself;
+                $selfbonusscale = ($gradediff / $gradeteacher) * 100;
+            } else {
+                $gradediff = $gradeself - $gradeteacher;
+                $selfbonusscale = ($gradediff / $gradeteacher) * 100;
+            }
+
+            $selfbonusscalearray = array();
+            for ($i = 1; $i <= 6; $i++) {
+                $selfbonusscalearray[$va->{'bonusscale' . $i}] = $va->{'bonus' . $i};
+            }
+
+            $selfkeys = array_keys($selfbonusscalearray);
+
+            array_push($selfkeys, $selfbonusscale);
+            sort($selfkeys);
+            $item = array_search($selfbonusscale, $selfkeys);
+
+            $total = $this->va->grade;
+            if ($total < 0) {
+                $total = 100;
+            }
+            if ($item + 1 == count($selfkeys)) {
+                $selfbonuspercent = 0;
+            } else {
+                $key = $selfkeys[$item + 1];
+                $selfbonuspercent = $selfbonusscalearray[$key];
+            }
+            $agg->selfbonusscale = $selfbonuspercent;
+            $agg->selffairnessbonus = (($selfbonuspercent / 100) * ((int) $va->bonuspercentage / 100) * $total);
+            $agg->finalscore =
+                ($agg->selffairnessbonus + $agg->fairnessbonus + $agg->gradebefore) > 100
+                ? 100 : ($agg->selffairnessbonus + $agg->fairnessbonus + $agg->gradebefore);
+        }
+
+        if ($rawgrade > 0) {
+            $this->update_grade_item(
+                [
+                    'userid' => $userid,
+                    'rawgrade' => $rawgrade,
+                ]
+            );
+
+            // Update completion state.
+            $completion = new \completion_info($this->course);
+            if (
+                $completion->is_enabled($this->cm) && $this->cm->completion == COMPLETION_TRACKING_AUTOMATIC
+                && ($rawgrade >= $va->gradepass_videoassessment)
+            ) {
+                $completion->update_state($this->cm, COMPLETION_COMPLETE);
+            }
+        }
+
+        $agg->timemodified = time();
+        $DB->update_record('videoassessment_aggregation', $agg);
+    }
+
+    /**
+     * Recalculate aggregated grades for all students.
+     *
+     * @return void
+     */
+    public function regrade() {
+        $users = $this->get_students();
+        foreach ($users as $user) {
+            $this->aggregate_grades($user->id);
+        }
+    }
+
+    /**
+     * Check whether the current or specified user graded a given user/area.
+     *
+     * @param int $gradeduser The graded user id
+     * @param string $gradingarea Grading area key
+     * @param int|null $grader Optional grader id, defaults to current user
+     * @return boolean True if a grade by the grader exists
+     */
+    public function is_graded_by_current_user($gradeduser, $gradingarea, $grader = null) {
+        global $DB, $USER;
+
+        if (!$grader) {
+            $grader = $USER->id;
+        }
+
+        return $DB->record_exists_sql('
+                SELECT gi.id
+                FROM {videoassessment_grade_items} gi
+                    JOIN {videoassessment_grades} g ON gi.id = g.gradeitem
+                WHERE gi.videoassessment = :va
+                    AND gi.gradeduser = :gradeduser
+                    AND gi.grader = :grader
+                    AND gi.type = :gradingarea
+                    AND g.grade >= 0
+                ',
+            array(
+                'va' => $this->instance,
+                'gradeduser' => $gradeduser,
+                'grader' => $grader,
+                'gradingarea' => $gradingarea,
+            )
+        );
+    }
+
+    /**
+     * Get peer user ids for the given user in this activity.
+     *
+     * @param int $userid User id
+     * @return array List of peer user ids
+     */
+    public function get_peers($userid) {
+        global $DB;
+
+        $peers = $DB->get_records(
+            'videoassessment_peers',
+            array(
+                'videoassessment' => $this->instance,
+                'peerid' => $userid,
+            )
+        );
+        $peerids = array();
+        foreach ($peers as $peer) {
+            $peerids[] = $peer->userid;
+        }
+
+        return $peerids;
+    }
+
+    /**
+     * Generate random peer mappings for a set of users.
+     *
+     * @param int[] $userids List of user ids
+     * @param int $numpeers Number of peers per user
+     * @return array Mapping: userid => int[] peer ids
+     */
+    public function get_random_peers_for_users(array $userids, $numpeers) {
+        $maxretry = 3; // Maximum retry count to avoid a “stuck” state.
+
+        assert(is_numeric($numpeers));
+        assert(count($userids) > $numpeers);
+
+        $inner = function ($userids, $numpeers) {
+            $peers = array_combine(
+                $userids,
+                array_fill(0, count($userids), array())
+            );
+
+            for ($p = 0; $p < $numpeers; $p++) {
+                $slots = array_values($userids);
+                $pieces = array_values($userids);
+
+                foreach ($userids as $userid) {
+
+                    $slotavailpieces = array_map(function ($slot) use (&$pieces, &$peers) {
+                        return (object) array(
+                            'slot' => $slot,
+                            'pieces' => array_values(array_filter($pieces, function ($piece) use ($slot, &$peers) {
+                                return $piece != $slot && !in_array($piece, $peers[$slot]);
+                            })),
+                        );
+                    }, $slots);
+                    uasort($slotavailpieces, function ($a, $b) {
+                        return count($a->pieces) - count($b->pieces);
+                    });
+
+                    $pieceavailslots = array_map(function ($piece) use (&$slots, &$peers) {
+                        return (object) array(
+                            'piece' => $piece,
+                            'slots' => array_values(array_filter($slots, function ($slot) use ($piece, &$peers) {
+                                return $slot != $piece && !in_array($piece, $peers[$slot]);
+                            })),
+                        );
+                    }, $pieces);
+                    uasort($pieceavailslots, function ($a, $b) {
+                        return count($a->slots) - count($b->slots);
+                    });
+
+                    $minslotpieces = reset($slotavailpieces);
+                    $minpieceslots = reset($pieceavailslots);
+                    if (empty($minslotpieces->pieces) || empty($minpieceslots->slots)) {
+                        throw new Exception();
+                    }
+
+                    if (count($minslotpieces->pieces) < count($minpieceslots->slots)) {
+                        $slot = $minslotpieces->slot;
+                        $piece = $minslotpieces->pieces[mt_rand(0, count($minslotpieces->pieces) - 1)];
+                    } else {
+                        $slot = $minpieceslots->slots[mt_rand(0, count($minpieceslots->slots) - 1)];
+                        $piece = $minpieceslots->piece;
+                    }
+
+                    assert(in_array($slot, $slots));
+                    assert(in_array($piece, $pieces));
+                    $slots = array_diff($slots, array($slot));
+                    $pieces = array_diff($pieces, array($piece));
+
+                    $peers[$slot][] = $piece;
+                }
+            }
+
+            return $peers;
+        };
+
+        // When the total number of users and the number of selected peers are close,
+        // a deadlock state may occasionally occur. Retry up to a maximum of $maxretry times.
+        for ($i = 0; $i < $maxretry; $i++) {
+            try {
+                return $inner($userids, $numpeers);
+            } catch (Exception $ex) {
+                continue;
+            }
+        }
+
+        // Failed after exceeding $maxretry attempts.
+        throw new RuntimeException(
+            sprintf('Failed to select random %d peers for %d users', $numpeers, count($userids))
+        );
+    }
+
+    /**
+     *
+     * @return boolean
+     */
+    public static function check_mp4_support() {
+        // If Flash is supported, FlowPlayer offers better usability and responsiveness,
+        // so we deliberately avoid using HTML5.
+        if (class_exists('core_useragent')) {
+            return \core_useragent::check_browser_version('MSIE')
+                || \core_useragent::check_browser_version('WebKit')
+                || \core_useragent::check_browser_version('Edge')
+                || \core_useragent::check_browser_version('Firefox');
+        } else {
+            return check_browser_version('MSIE')
+                || check_browser_version('WebKit')
+                || check_browser_version('Edge')
+                || check_browser_version('Firefox');
+        }
+    }
+
+    /**
+     * Render a lightweight preview of a user's associated videos.
+     *
+     * @return string Rendered HTML snippet
+     */
+    public function preview_video() {
+        global $DB, $PAGE, $OUTPUT;
+
+        $width = optional_param('width', 400, PARAM_INT);
+        $height = optional_param('height', 300, PARAM_INT);
+
+        $PAGE->set_pagelayout('embedded');
+
+        $o = $OUTPUT->header();
+
+        if ($videoid = optional_param('videoid', 0, PARAM_INT)) {
+            $videorec = $DB->get_record('videoassessment_videos', array('id' => $videoid));
+            $video = new video($this->context, $videorec);
+        } else {
+            $userid = required_param('userid', PARAM_INT);
+            $timing = required_param('timing', PARAM_ALPHA);
+            $video = $this->get_associated_video($userid, $timing);
+        }
+
+        if ($video->ready) {
+            $video->width = $width;
+            $video->height = $height;
+            $o .= $this->output->render($video);
+        } else {
+            $o .= \html_writer::tag('p', self::str('videonotfound'), array('style' => 'color:#fff'));
+        }
+        $o .= $OUTPUT->footer();
+
+        return $o;
+    }
+
+    /**
+     * Update gradebook items and optionally push grades.
+     *
+     * @param null|array|\stdClass $grades Grade data or null to update item only
+     * @param null|string $gradingarea Specific area or null for all
+     * @return int GRADE_UPDATE_* result code
+     */
+    public function update_grade_item($grades = null, $gradingarea = null) {
+        global $CFG;
+        require_once($CFG->libdir . '/gradelib.php');
+
+        $itemname = $this->va->name;
+        $itemnumber = 0;
+        if ($gradingarea) {
+            $itemname .= ' (' . self::str($gradingarea) . ')';
+            $itemnumber = $this->get_grade_item_number($gradingarea);
+        }
+
+        $params = array(
+            'itemname' => $itemname,
+            'idnumber' => $this->cm->id,
+        );
+
+        return grade_update(
+            'mod/videoassessment',
+            $this->course->id,
+            'mod',
+            'videoassessment',
+            $this->instance,
+            $itemnumber,
+            $grades,
+            $params
+        );
+    }
+
+    /**
+     * Map grading area key to grade item number.
+     *
+     * @param string $gradingarea Grading area key
+     * @return int|null Grade item number (1..n) or null if not mapped
+     */
+    private function get_grade_item_number($gradingarea) {
+        switch ($gradingarea) {
+            case 'beforeteacher':
+                return 1;
+            case 'beforeself':
+                return 2;
+            case 'beforepeer':
+                return 3;
+            case 'afterteacher':
+                return 4;
+            case 'afterself':
+                return 5;
+            case 'afterpeer':
+                return 6;
+        }
+        return null;
+    }
+
+    /**
+     * Generate and send an Excel report of grades to the browser.
+     *
+     * @return void
+     */
+    private function download_xls_report() {
+        global $CFG, $DB;
+
+        $groupid = groups_get_activity_group($this->cm, true);
+        $currentgroup = groups_get_group($groupid, 'name');
+
+        $table = new table_export();
+        $table->filename = $this->cm->name . '.xls';
+        $fullnamestr = util::get_fullname_label();
+        $table->set(0, 0, self::str('title') . ' ' . $this->cm->name);
+        $table->set(1, 0, get_string('idnumber'));
+        $table->set(1, 1, $fullnamestr);
+        $table->set(1, 2, self::str('groupname'));
+        $table->set(1, 3, self::str('teacherselfpeer'));
+        $table->set(1, 4, self::str('assessedby') . ' (' . get_string('idnumber') . ')');
+        $table->set(1, 5, self::str('assessedby') . ' (' . $fullnamestr . ')');
+        $table->set(1, 6, self::str('total'));
+        $fixedcolumns = 7;
+
+        $rubric = new rubric($this);
+        $headercriteria = [];
+        foreach ($this->gradingareas as $gradingarea) {
+            $controller = $rubric->get_available_controller($gradingarea);
+            if ($controller) {
+                $definition = $controller->get_definition();
+                if (isset($definition->rubric_criteria)) {
+                    foreach ($definition->rubric_criteria as $criterion) {
+                        if (!in_array($criterion['description'], $headercriteria)) {
+                            $headercriteria[] = $criterion['description'];
+                        }
+                    }
+                }
+            }
+        }
+        $headercriteria = array_flip($headercriteria);
+
+        foreach ($headercriteria as $criterion => $index) {
+            $table->set(1, $index + $fixedcolumns, $criterion);
+        }
+
+        $users = $this->get_students('u.id, u.lastname, u.firstname, u.idnumber', $groupid);
+        $timingstrs = array(
+            'before' => $this->timing_str('before'),
+            'after' => $this->timing_str('after'),
+        );
+        $gradertypestrs = array(
+            'teacher' => self::str('teacher'),
+            'self' => self::str('self'),
+            'peer' => self::str('peer'),
+            'class' => self::str('class'),
+        );
+        $row = 2;
+        foreach ($users as $user) {
+            $fullname = fullname($user);
+
+            if (!empty($currentgroup)) {
+                $groupname = $currentgroup->name;
+            } else {
+                $groups = groups_get_all_groups($this->va->course, $user->id);
+                $groupname = array();
+
+                if (!empty($groups)) {
+                    foreach ($groups as $group) {
+                        $groupname[] = $group->name;
+                    }
+                }
+
+                $groupname = implode(', ', $groupname);
+            }
+
+            foreach ($this->gradingareas as $gradingarea) {
+                $gradeitems = $this->get_grade_items($gradingarea, $user->id);
+                if ($controller = $rubric->get_available_controller($gradingarea)) {
+                    foreach ($gradeitems as $gradeitem) {
+                        $table->set($row, 0, $user->idnumber);
+                        $table->set($row, 1, $fullname);
+                        $table->set($row, 2, $groupname);
+                        if (preg_match('/^(before|after)(self|peer|teacher|class)$/', $gradingarea, $m)) {
+                            $table->set($row, 3, $gradertypestrs[$m[2]]);
+
+                            if (empty($grader) || $grader->id != $gradeitem->grader) {
+                                $grader = $DB->get_record(
+                                    'user',
+                                    array('id' => $gradeitem->grader),
+                                    'id, lastname, firstname, idnumber'
+                                );
+                                if ($grader) {
+                                    $gradername = fullname($grader);
+                                }
+                            }
+                            if ($grader) {
+                                $table->set($row, 4, $grader->idnumber);
+                                $table->set($row, 5, $gradername);
+                            }
+                        }
+                        $instances = $controller->get_active_instances($gradeitem->id);
+                        if (isset($instances[0])) {
+                            /* @var $instance \gradingform_rubric_instance */
+                            $instance = $instances[0];
+                            $definition = $instance->get_controller()->get_definition();
+                            $filling = $instance->get_rubric_filling();
+                            $table->set($row, 6, $gradeitem->grade);
+
+                            foreach ($definition->rubric_criteria as $id => $criterion) {
+                                $critfilling = $filling['criteria'][$id];
+                                $level = $criterion['levels'][$critfilling['levelid']];
+
+                                $table->set(
+                                    $row,
+                                    $headercriteria[$criterion['description']] + $fixedcolumns,
+                                    $level['score']
+                                );
+                            }
+                        }
+                        $row++;
+                    }
+                }
+            }
+        }
+
+        if (optional_param('csv', 0, PARAM_BOOL)) {
+            $table->csv();
+        } else {
+            $table->xls(true);
+        }
+        exit();
+    }
+
+    /**
+     * Get enrolled students for this activity, optionally filtered by group.
+     *
+     * @param string|null $userfields Comma-separated user fields to fetch
+     * @param int|null $groupid Group id or null to detect current group
+     * @return array List of user records
+     */
+    public function get_students($userfields = null, $groupid = null) {
+        if (!$userfields) {
+            $userfields = \core_user\fields::for_identity($this->context)->including('id', 'lastname', 'firstname', 'idnumber')->get_sql('u', false, '', '', false)->selects;
+        }
+
+        if ($groupid === null) {
+            $groupid = groups_get_activity_group($this->cm, true);
+        }
+
+        return get_enrolled_users(
+            $this->context,
+            'mod/videoassessment:submit',
+            $groupid,
+            $userfields,
+            'u.lastname, u.firstname'
+        );
+    }
+
+    /**
+     * Build a view URL for this activity with optional action and params.
+     *
+     * @param string $action Action key
+     * @param array $params Additional URL params
+     * @return \moodle_url Resulting URL
+     */
+    public function get_view_url($action = '', array $params = array()) {
+        $params['action'] = $action;
+
+        return new \moodle_url($this->viewurl, $params);
+    }
+
+    /**
+     * Get localized label for a timing, optionally wrapped in another string.
+     *
+     * @param string $timing Timing key, e.g. 'before' or 'after'
+     * @param string|null $langstring Optional parent string identifier
+     * @return string Localized label
+     */
+    public function timing_str($timing, $langstring = null) {
+        $customlabel = $this->va->{$timing . 'label'};
+
+        if ($customlabel !== '') {
+            $label = $customlabel;
+        } else {
+            $label = self::str($timing);
+        }
+
+        if ($langstring) {
+            return ucfirst(self::str($langstring, $label));
+        }
+        return ucfirst($label);
+    }
+
+    /**
+     * Check whether a user (or current) has teacher grading capability.
+     *
+     * @param int|null $userid Optional user id, defaults to current user
+     * @return boolean True if user can grade in this context
+     */
+    public function is_teacher($userid = null) {
+        return has_capability('mod/videoassessment:grade', $this->context, $userid);
+    }
+
+
+    /**
+     * Require teacher capability in this activity context.
+     *
+     * @return void
+     */
+    public function teacher_only() {
+        require_capability('mod/videoassessment:grade', $this->context);
+    }
+
+    /**
+     *
+     * @param string $identifier
+     * @param string|\stdClass $a
+     * @return string
+     */
+    public static function str($identifier, $a = null) {
+        return get_string($identifier, 'mod_videoassessment', $a);
+    }
+
+    /**
+     *
+     * @param int $vaid
+     */
+    public static function cleanup_old_peer_grades($vaid) {
+        global $DB, $CFG;
+
+        $gradeitems = $DB->get_records_sql(
+            '
+                SELECT * FROM {videoassessment_grade_items} gi
+                    WHERE gi.videoassessment = :va
+                        AND (gi.type = \'beforepeer\' OR gi.type = \'afterpeer\')
+                        AND (
+                            SELECT COUNT(*) FROM {videoassessment_peers} p
+                                WHERE p.videoassessment = gi.videoassessment
+                                    AND p.userid = gi.gradeduser
+                                    AND p.peerid = gi.grader
+                        ) = 0
+                ',
+            array(
+                'va' => $vaid,
+            )
+        );
+        foreach ($gradeitems as $gradeitem) {
+            $DB->delete_records('videoassessment_grades', array('gradeitem' => $gradeitem->id));
+            $DB->delete_records('videoassessment_grade_items', array('id' => $gradeitem->id));
+        }
+
+        $vas = $DB->get_records('videoassessment');
+        foreach ($vas as $va) {
+            $cm = get_coursemodule_from_instance('videoassessment', $va->id);
+            $context = \context_module::instance($cm->id);
+            $course = $DB->get_record('course', array('id' => $cm->course));
+            $vaobj = new self($context, $cm, $course);
+            $vaobj->regrade();
+        }
+    }
+
+    /**
+     *
+     * @return boolean
+     */
+    public static function uses_mobile_upload() {
+        if (class_exists('core_useragent')) {
+            $device = \core_useragent::get_device_type();
+        } else {
+            $device = get_device_type();
+        }
+
+        return $device == 'mobile' || $device == 'tablet';
+    }
+
+    /**
+     * Get the list of courses that the specified user can access as a teacher.
+     *
+     * @param int $userid
+     * @return object[]
+     * @global object $CFG
+     */
+    public static function get_courses_managed_by($userid, $catid = null) {
+        global $CFG;
+
+        $managerroles = explode(',', $CFG->coursecontact);
+        $courses = array();
+        foreach (\enrol_get_all_users_courses($userid) as $course) {
+            if (empty($catid) || $catid == $course->category) {
+                $ctx = \context_course::instance($course->id);
+                $rusers = \get_role_users($CFG->coursecontact, $ctx, true, 'u.id, u.lastname, u.firstname ');
+                if (isset($rusers[$userid])) {
+                    $courses[$course->id] = $course;
+                }
+            }
+        }
+        return $courses;
+    }
+
+    /**
+     * Get users enrolled via manual enrolments that also have grades.
+     *
+     * @param int $courseid Course id
+     * @return array List of user records
+     */
+    public static function get_users($courseid) {
+        global $DB;
+
+        $sql = '
+                SELECT u.* FROM {user} u
+                INNER JOIN {user_enrolments} ue ON u.id = ue.userid
+                INNER JOIN {enrol} e ON ue.enrolid = e.id
+                INNER JOIN {grade_grades} gg ON u.id = gg.userid
+                WHERE e.enrol = :enrol AND e.courseid = :courseid
+        ';
+
+        $params = array(
+            'enrol' => 'manual',
+            'courseid' => $courseid,
+        );
+
+        $users = $DB->get_records_sql($sql, $params);
+        return $users;
+    }
+
+    /**
+     * Get courses that contain at least one Video Assessment module.
+     *
+     * @return array List of course records
+     */
+    public static function get_courses() {
+        global $DB;
+
+        $sql = '
+                SELECT c.* FROM {course} c
+                INNER JOIN {course_modules} cm ON c.id = cm.course
+                INNER JOIN {modules} m ON cm.module = m.id
+                WHERE m.name = :name
+        ';
+
+        $params = array(
+            'name' => 'videoassessment',
+        );
+
+        return $DB->get_records_sql($sql, $params);
+    }
+
+    /**
+     * Get the course module record for Video Assessment in a course.
+     *
+     * @param int $courseid Course id
+     * @return object|null Course module record or null if not found
+     */
+    public static function get_cm($courseid) {
+        global $DB;
+
+        $sql = '
+                SELECT cm.* FROM {course_modules} cm
+                INNER JOIN {modules} m ON cm.module = m.id
+                WHERE m.name = :name AND cm.course = :courseid
+        ';
+
+        $params = array(
+            'name' => 'videoassessment',
+            'courseid' => $courseid,
+        );
+
+        return $DB->get_record_sql($sql, $params);
+    }
+
+    /**
+     * Get aggregate count and sum of a user's module grades in a course.
+     *
+     * @param int $courseid Course id
+     * @param int $userid User id
+     * @return object DB record with fields: count, total
+     */
+    public static function get_grade($courseid, $userid) {
+        global $DB;
+
+        $sql = '
+                SELECT count(gi.id) as count, sum(gg.finalgrade) as total FROM {grade_items} gi
+                LEFT JOIN {grade_grades} gg ON gi.id = gg.itemid
+                WHERE gi.courseid = :courseid AND gg.userid = :userid AND gi.itemtype = :itemtype
+        ';
+
+        $params = array(
+            'courseid' => $courseid,
+            'userid' => $userid,
+            'itemtype' => 'mod',
+        );
+
+        return $DB->get_record_sql($sql, $params);
+    }
+
+    /**
+     * Get students list with optional manual sorting by group or course.
+     *
+     * @param int|null $groupid Group id to filter, or null for course scope
+     * @param bool $sortmanually Whether to apply manual sort order if available
+     * @param string|null $order Raw ORDER BY fragment when needed
+     * @return array List of student records
+     */
+    public function get_students_sort($groupid = null, $sortmanually = false, $order = null) {
+        global $DB;
+
+        $userfields = \core_user\fields::for_identity($this->context)->including('id', 'lastname', 'firstname', 'idnumber')->get_sql('u', false, '', '', false)->selects;
+
+        if ($sortmanually) {
+            $order = ' ORDER BY sortorder ASC';
+        }
+
+        $contextcourse = \context_course::instance($this->course->id);
+        $params = [
+            'contextid' => $contextcourse->id,
+            'roleid' => 5,
+            'courseid' => $this->course->id,
+        ];
+
+        if (!empty($groupid)) {
+            $join = ' JOIN {groups_members} gm ON gm.userid = u.id';
+            $join .= ' LEFT JOIN {videoassessment_sort_items} vsi ON gm.groupid = vsi.itemid AND vsi.type = :type';
+            $join .= ' LEFT JOIN {videoassessment_sort_order} vso ON vso.sortitemid = vsi.id AND vso.userid = u.id';
+            $where = ' AND gm.groupid = :groupid';
+            $params['groupid'] = $groupid;
+            $params['type'] = 'group';
+            $userfields .= ', vso.id as orderid, vso.sortorder as sortorder';
+        } else {
+            $join = ' LEFT JOIN {videoassessment_sort_items} vsi ON e.courseid = vsi.itemid AND vsi.type = :type';
+            $join .= ' LEFT JOIN {videoassessment_sort_order} vso ON vso.sortitemid = vsi.id AND vso.userid = u.id';
+            $where = '';
+            $params['type'] = 'course';
+            $userfields .= ', vso.id as orderid, vso.sortorder as sortorder';
+        }
+
+        $sql = "
+            SELECT $userfields
+            FROM {user} u
+            JOIN {role_assignments} ra ON u.id = ra.userid
+            JOIN {user_enrolments} ue ON u.id = ue.userid
+            JOIN {enrol} e ON ue.enrolid = e.id" . $join . "
+            WHERE ra.contextid = :contextid AND ra.roleid = :roleid AND e.courseid = :courseid
+        " . $where . $order;
+
+        $students = $DB->get_records_sql($sql, $params);
+        return $students;
+    }
+
+    /**
+     * Get peer user ids for a user with optional manual sorting.
+     *
+     * @param int $groupid Group id to filter (0 for course scope)
+     * @param int $userid Base user id whose peers are returned
+     * @param bool $sortmanually Whether to apply manual sort order if available
+     * @param string|null $order Raw ORDER BY fragment when needed
+     * @return int[] Ordered list of peer user ids
+     */
+    public function get_peers_sort($userid, $groupid = 0, $sortmanually = false, $order = null) {
+        global $DB;
+
+        $contextcourse = \context_course::instance($this->course->id);
+        $params = array(
+            'videoassessment' => $this->instance,
+            'peerid' => $userid,
+            'contextid' => $contextcourse->id,
+        );
+
+        if ($sortmanually) {
+            $order = ' ORDER BY sortorder ASC';
+        }
+
+        if (!empty($groupid)) {
+            $join = ' JOIN {groups_members} gm ON gm.userid = u.id';
+            $join .= ' LEFT JOIN {videoassessment_sort_items} vsi ON gm.groupid = vsi.itemid AND vsi.type = :type';
+            $join .= ' LEFT JOIN {videoassessment_sort_order} vso ON vso.sortitemid = vsi.id AND vso.userid = u.id';
+            $where = ' AND gm.groupid = :groupid';
+            $params['groupid'] = $groupid;
+            $params['type'] = 'group';
+            $fields = ', vso.sortorder as sortorder';
+        } else {
+            $join = ' LEFT JOIN {videoassessment_sort_items} vsi ON e.courseid = vsi.itemid AND vsi.type = :type';
+            $join .= ' LEFT JOIN {videoassessment_sort_order} vso ON vso.sortitemid = vsi.id AND vso.userid = u.id';
+            $where = '';
+            $params['type'] = 'course';
+            $fields = ', vso.sortorder as sortorder';
+        }
+
+        $sql = "
+            SELECT vp.userid $fields
+            FROM {videoassessment_peers} vp
+            JOIN {user} u ON vp.userid = u.id
+            JOIN {role_assignments} ra ON u.id = ra.userid
+            JOIN {user_enrolments} ue ON vp.userid = ue.userid
+            JOIN {enrol} e ON ue.enrolid = e.id
+            $join
+            WHERE vp.videoassessment = :videoassessment AND vp.peerid = :peerid AND ra.contextid = :contextid
+        " . $where . $order;
+
+        $students = $DB->get_records_sql($sql, $params);
+        $peerids = array();
+        foreach ($students as $student) {
+            $peerids[] = $student->userid;
+        }
+
+        return $peerids;
+    }
+
+    /**
+     * Fetch archived grading instances for a controller and item.
+     *
+     * @param \gradingform_controller $controller Grading controller
+     * @param int $itemid Grade item id
+     * @return \gradingform_rubric_instance[] List of archived instances
+     */
+    public function get_archive_instances($controller, $itemid) {
+        global $DB;
+        $conditions = array(
+            'definitionid' => $controller->get_definition()->id,
+            'itemid' => $itemid,
+            'status' => \gradingform_instance::INSTANCE_STATUS_ARCHIVE,
+        );
+        $records = $DB->get_recordset('grading_instances', $conditions);
+        $rv = array();
+        foreach ($records as $record) {
+            $rv[] = new \gradingform_rubric_instance($controller, $record);
+        }
+        return $rv;
+    }
+
+    /**
+     * Build HTML for the training result comparison table.
+     *
+     * @param object $definition Rubric definition
+     * @param array $studentfilling Student rubric filling
+     * @param array $teacherfilling Teacher rubric filling
+     * @param array $historyfillings Optional historic student fillings
+     * @return array{0:string,1:bool,2:array} [html, passed, passedCriterionIds]
+     */
+    public function get_training_result_table($definition, $studentfilling, $teacherfilling, $historyfillings = array()) {
+        $o = '';
+        $passed = true;
+        $rubricspassed = array();
+        $even = 1;
+
+        if (!empty($definition)) {
+            foreach ($definition->rubric_criteria as $rid => $rubric) {
+                if ($even == 1) {
+                    $even = 0;
+                    $trclass = 'even';
+                } else {
+                    $even = 1;
+                    $trclass = 'odd';
+                }
+
+                $o .= \html_writer::start_tag('tr', array('class' => 'rubric-result ' . $trclass, 'id' => 'advancedgradingbefore-criteria-' . $rid));
+
+                $o .= \html_writer::start_tag('td', array('class' => 'bold'));
+                $o .= $rubric['description'];
+                $o .= \html_writer::end_tag('td');
+
+                $scores = array();
+                $row = '';
+                $icon = '';
+
+                foreach ($rubric['levels'] as $lid => $level) {
+
+                    $selecteds = '';
+                    $tdclass = '';
+                    $selected = false;
+
+                    if (!empty($studentfilling) && $studentfilling['criteria'][$rid]['levelid'] == $lid) {
+                        $selecteds .= \html_writer::start_tag('span', array('class' => 'student-selected score-selected'));
+                        $selecteds .= self::str('self');
+                        $selecteds .= \html_writer::end_tag('span');
+                        $selecteds .= '<br>';
+
+                        $tdclass .= ' student-td';
+                        $selected = true;
+                    } else if (!empty($historyfillings) && isset($historyfillings[$rid]) && in_array($lid, $historyfillings[$rid])) {
+                        $selecteds .= \html_writer::start_tag('span', array('class' => 'student-selected score-selected'));
+                        $selecteds .= self::str('self');
+                        $selecteds .= \html_writer::end_tag('span');
+                        $selecteds .= '<br>';
+
+                        $tdclass .= ' student-history-td';
+                    }
+
+                    if (!empty($teacherfilling) && $teacherfilling['criteria'][$rid]['levelid'] == $lid) {
+                        $selecteds .= \html_writer::start_tag('span', array('class' => 'teacher-selected score-selected'));
+                        $selecteds .= self::str('teacher');
+                        $selecteds .= \html_writer::end_tag('span');
+                        $selecteds .= '<br>';
+
+                        $tdclass .= ' teacher-td';
+                        $selected = true;
+                    }
+
+                    if ($selected) {
+                        $tdclass .= ' selected';
+                    }
+
+                    $row .= \html_writer::start_tag('td', array('class' => $tdclass));
+                    $row .= \html_writer::start_tag('div');
+                    $row .= $level['definition'];
+                    $row .= \html_writer::end_tag('div');
+                    $row .= \html_writer::start_tag('div', array('class' => 'score'));
+                    $row .= $level['score'] . ' ' . get_string('points', 'grades');
+                    $row .= \html_writer::end_tag('div');
+                    $row .= \html_writer::start_tag('div', array('class' => 'score-selected-wrap'));
+
+                    $row .= $selecteds;
+
+                    $row .= \html_writer::end_tag('td');
+                    $row .= \html_writer::end_tag('td');
+
+                    $scores[$lid] = $level['score'];
+                }
+
+                if (!empty($teacherfilling) && !empty($studentfilling)) {
+                    $minscore = min($scores);
+                    $maxscore = max($scores);
+                    $differencescore = abs($scores[$studentfilling['criteria'][$rid]['levelid']] - $scores[$teacherfilling['criteria'][$rid]['levelid']]);
+                    $accepteddifference = $this->va->accepteddifference;
+                    $difference = ($differencescore / ($maxscore - $minscore)) * 100;
+
+                    if ($difference > $accepteddifference) {
+                        $passed = false;
+                        $icon = 'failed';
+                    } else {
+                        $icon = 'passed';
+                        $rubricspassed[] = $rid;
+                    }
+                }
+
+                $o .= \html_writer::start_tag('td');
+                $o .= \html_writer::start_tag('table');
+                $o .= \html_writer::start_tag('tr', array('class' => 'criterion-' . $icon));
+
+                $o .= $row;
+
+                $o .= \html_writer::end_tag('tr');
+                $o .= \html_writer::end_tag('table');
+                $o .= \html_writer::end_tag('td');
+
+                if (!empty($icon)) {
+                    $o .= \html_writer::start_tag('td', array('class' => 'status'));
+                    $o .= \html_writer::img('images/' . $icon . '.gif', $icon);
+                    $o .= \html_writer::end_tag('td');
+                }
+
+                $o .= \html_writer::end_tag('tr');
+            }
+        }
+
+        return array($o, $passed, $rubricspassed);
+    }
+
+    /**
+     * Get a sort item record by type and item id.
+     *
+     * @param string $type 'course' or 'group'
+     * @param int $itemid Course id or group id
+     * @return object|null Sort item record
+     */
+    public function get_sort_items($type, $itemid) {
+        global $DB;
+        return $DB->get_record('videoassessment_sort_items', array('type' => $type, 'itemid' => $itemid));
+    }
+}
