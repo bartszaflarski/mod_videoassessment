@@ -43,9 +43,6 @@ use core_grades\component_gradeitems;
  */
 class mod_videoassessment_mod_form extends moodleform_mod {
 
-    /** @var int Maximum number of peers allowed for assessment */
-    const MAX_USED_PEERS_LIMIT = 3;
-
     /** @var int Default number of peers for assessment */
     const DEFAULT_USED_PEERS = 1;
 
@@ -175,12 +172,11 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $mform->setDefault('delayedteachergrade', 1);
         $mform->addHelpButton('delayedteachergrade', 'delayedteachergrade', 'videoassessment');
 
-        $students = get_enrolled_users($this->context);
-        $maxusedpeers = min(count($students), self::MAX_USED_PEERS_LIMIT);
-        $usedpeeropts = range(0, $maxusedpeers);
-        $mform->addElement('select', 'usedpeers', get_string('usedpeers', 'videoassessment'), $usedpeeropts);
+        $mform->addElement('text', 'usedpeers', get_string('usedpeers', 'videoassessment'), ['size' => 5]);
+        $mform->setType('usedpeers', PARAM_INT);
         $mform->setDefault('usedpeers', 0);
         $mform->addHelpButton('usedpeers', 'usedpeers', 'videoassessment');
+        $mform->addRule('usedpeers', get_string('err_numeric', 'form'), 'numeric', null, 'client');
 
         // Assign peers section.
         $mform->addElement('header', 'assignpeerssection', get_string('assignpeers', 'videoassessment'));
@@ -215,34 +211,42 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         // Allow plugin videoassessment types to do any extra validation after the form has been submitted.
         $errors = parent::validation($data, $files);
 
-        $ratingsum = $data['ratingteacher'] + $data['ratingself'] + $data['ratingpeer'] + $data['ratingclass'];
-        if ($ratingsum != 100) {
-            $errors['ratingerror'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
+        // Validate number of peer assessments is a non-negative integer.
+        if (isset($data['usedpeers'])) {
+            $usedpeers = $data['usedpeers'];
+            if (!is_numeric($usedpeers) || intval($usedpeers) != $usedpeers || $usedpeers < 0) {
+                $errors['usedpeers'] = get_string('usedpeerserror', 'videoassessment');
+            }
         }
 
-        if (!empty($data['allowsubmissionsfromdate']) && !empty($data['duedate'])) {
-            if ($data['duedate'] < $data['allowsubmissionsfromdate']) {
-                $errors['duedate'] = get_string('duedatevalidation', 'assign');
+            $ratingsum = $data['ratingteacher'] + $data['ratingself'] + $data['ratingpeer'] + $data['ratingclass'];
+            if ($ratingsum != 100) {
+                $errors['ratingerror'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
             }
-        }
-        if (!empty($data['cutoffdate']) && !empty($data['duedate'])) {
-            if ($data['cutoffdate'] < $data['duedate']) {
-                $errors['cutoffdate'] = get_string('cutoffdatevalidation', 'assign');
+
+            if (!empty($data['allowsubmissionsfromdate']) && !empty($data['duedate'])) {
+                if ($data['duedate'] < $data['allowsubmissionsfromdate']) {
+                    $errors['duedate'] = get_string('duedatevalidation', 'assign');
+                }
             }
-        }
-        if (!empty($data['allowsubmissionsfromdate']) && !empty($data['cutoffdate'])) {
-            if ($data['cutoffdate'] < $data['allowsubmissionsfromdate']) {
-                $errors['cutoffdate'] = get_string('cutoffdatefromdatevalidation', 'assign');
+            if (!empty($data['cutoffdate']) && !empty($data['duedate'])) {
+                if ($data['cutoffdate'] < $data['duedate']) {
+                    $errors['cutoffdate'] = get_string('cutoffdatevalidation', 'assign');
+                }
             }
-        }
-        if ($data['gradingduedate']) {
-            if ($data['allowsubmissionsfromdate'] && $data['allowsubmissionsfromdate'] > $data['gradingduedate']) {
-                $errors['gradingduedate'] = get_string('gradingduefromdatevalidation', 'assign');
+            if (!empty($data['allowsubmissionsfromdate']) && !empty($data['cutoffdate'])) {
+                if ($data['cutoffdate'] < $data['allowsubmissionsfromdate']) {
+                    $errors['cutoffdate'] = get_string('cutoffdatefromdatevalidation', 'assign');
+                }
             }
-            if ($data['duedate'] && $data['duedate'] > $data['gradingduedate']) {
-                $errors['gradingduedate'] = get_string('gradingdueduedatevalidation', 'assign');
+            if ($data['gradingduedate']) {
+                if ($data['allowsubmissionsfromdate'] && $data['allowsubmissionsfromdate'] > $data['gradingduedate']) {
+                    $errors['gradingduedate'] = get_string('gradingduefromdatevalidation', 'assign');
+                }
+                if ($data['duedate'] && $data['duedate'] > $data['gradingduedate']) {
+                    $errors['gradingduedate'] = get_string('gradingdueduedatevalidation', 'assign');
+                }
             }
-        }
 
         return $errors;
     }
@@ -280,48 +284,24 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 && !empty($this->current->_advancedgradingdata['methods'])
                 && !empty($this->current->_advancedgradingdata['areas'])) {
 
-                if (count($this->current->_advancedgradingdata['areas']) == 1) {
-                    // If there is just one gradable area (most cases), display just the selector
-                    // without its name to make UI simplier.
-                    $areadata = reset($this->current->_advancedgradingdata['areas']);
-                    $areaname = key($this->current->_advancedgradingdata['areas']);
+                // Use a single grading method selector for all areas.
+                // Get the first area name to use as the primary selector.
+                $firstareaname = key($this->current->_advancedgradingdata['areas']);
+
                     $mform->addElement(
                         'select',
-                        'advancedgradingmethod_' . $areaname,
+                    'advancedgradingmethod_' . $firstareaname,
                         get_string('advancedgradingmethodsgroup', 'videoassessment'),
                         $this->current->_advancedgradingdata['methods']
                     );
-                    $mform->addHelpButton('advancedgradingmethod_' . $areaname, 'gradingmethod', 'core_grading');
-                } else {
-                    // The module defines multiple gradable areas, display a selector
-                    // for each of them together with a name of the area.
-                    $areasgroup = [];
-                    foreach ($this->current->_advancedgradingdata['areas'] as $areaname => $areadata) {
-                        $areasgroup[] = $mform->createElement(
-                            'select',
-                            'advancedgradingmethod_' . $areaname,
-                            $areadata['title'],
-                            $this->current->_advancedgradingdata['methods']
-                        );
-                        $areasgroup[] = $mform->createElement(
-                            'static',
-                            'advancedgradingareaname_' . $areaname,
-                            '',
-                            $areadata['title']
-                        );
-                        $mform->setDefault(
-                            'advancedgradingmethod_' . $areaname,
-                            $this->current->{'advancedgradingmethod_'.$areaname},
-                        );
-                    }
-                    $mform->addGroup(
-                        $areasgroup,
-                        'advancedgradingmethodsgroup',
-                        get_string('advancedgradingmethodsgroup', 'videoassessment'),
-                        [' ', '<br />'],
-                        false
-                    );
-                    $mform->addHelpButton('advancedgradingmethodsgroup', 'advancedgradingmethodsgroup', 'videoassessment');
+                $mform->addHelpButton('advancedgradingmethod_' . $firstareaname, 'advancedgradingmethodsgroup', 'videoassessment');
+
+                // Add hidden fields for other areas that will sync with the main selector.
+                $otherareas = array_keys($this->current->_advancedgradingdata['areas']);
+                array_shift($otherareas); // Remove first area as it has the visible select.
+                foreach ($otherareas as $areaname) {
+                    $mform->addElement('hidden', 'advancedgradingmethod_' . $areaname);
+                    $mform->setType('advancedgradingmethod_' . $areaname, PARAM_ALPHANUMEXT);
                 }
             }
             $mform->addElement(
@@ -908,5 +888,35 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $PAGE->requires->js_call_amd('mod_videoassessment/peer_assignment', 'init', [$jsparams]);
 
         return $o;
+    }
+
+    /**
+     * Override get_data to sync all grading method fields.
+     *
+     * When a single grading method selector is used, this method ensures
+     * all grading area methods are set to the same value.
+     *
+     * @return object|null Form data object with synced grading methods
+     */
+    public function get_data() {
+        $data = parent::get_data();
+
+        if ($data && !empty($this->current->_advancedgradingdata['areas'])) {
+            // Get all area names.
+            $areas = array_keys($this->current->_advancedgradingdata['areas']);
+
+            if (count($areas) > 1) {
+                // Get the value from the first (visible) selector.
+                $firstareaname = $areas[0];
+                $selectedmethod = $data->{'advancedgradingmethod_' . $firstareaname} ?? '';
+
+                // Sync all other areas to the same method.
+                foreach ($areas as $areaname) {
+                    $data->{'advancedgradingmethod_' . $areaname} = $selectedmethod;
+                }
+            }
+        }
+
+        return $data;
     }
 }

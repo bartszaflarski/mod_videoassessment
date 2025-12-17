@@ -189,7 +189,8 @@ $string['uploadvideos'] = 'Upload videos';
 $string['startrecoding'] = 'Start Recording';
 $string['pause'] = 'Pause';
 $string['usedpeers'] = 'Number of Peer Assessments';
-$string['usedpeers_help'] = 'A teacher can set the number of peer assessments from 0 to 3, or unlimited. In the Ratings menu, the teacher can then assign the peer automatically or manually. The default is always "0" peers, except when a percentage for peer assessment is assigned to above 0%. Then the default becomes "1" and can be manually re-set from 1-3 or unlimited.';
+$string['usedpeers_help'] = 'Enter the number of peer assessments (0 or more). In the Ratings menu, the teacher can then assign the peer automatically or manually. The default is always "0" peers, except when a percentage for peer assessment is assigned to above 0%. Then the default becomes "1".';
+$string['usedpeerserror'] = 'Number of Peer Assessments must be a non-negative integer (0 or greater).';
 $string['unlimited'] = 'Unlimited';
 $string['videopublishing'] = 'Video Publishing';
 $string['allowyoutube'] = 'Allow YouTube videos';
@@ -379,6 +380,7 @@ $string['gradeitem:beforeclass'] = 'Class';
 
 $string['graded'] = 'Graded';
 $string['recordnewvideo'] = 'Record New Video';
+$string['recordnewvideo_help'] = 'Record a new video directly using your device camera for assessment.';
 $string['recordradios'] = 'Record New Video';
 $string['recordradios_help'] = 'Record New Video is for directly recording a video for assessment.
 This function accesses the camera on your computer or mobile phone and starts a video recording.
