@@ -99,6 +99,21 @@ function videoassessment_add_instance($va, $form) {
         debugging('Peer assignments not set in form data', DEBUG_DEVELOPER);
     }
 
+    // Check if rubric grading method is selected and set session flag for redirect.
+    $rubricselected = false;
+    foreach (['beforeteacher', 'beforetraining', 'beforepeer', 'beforeclass', 'beforeself'] as $area) {
+        $fieldname = 'advancedgradingmethod_' . $area;
+        if (isset($va->$fieldname) && $va->$fieldname === 'rubric') {
+            $rubricselected = true;
+            break;
+        }
+    }
+
+    if ($rubricselected) {
+        global $SESSION;
+        $SESSION->videoassessment_redirect_to_grading = $va->id;
+    }
+
     return $va->id;
 }
 

@@ -156,6 +156,21 @@ if ($action == "") {
 $context = context_module::instance($cm->id);
 require_capability('mod/videoassessment:view', $context);
 
+// Check if we need to redirect to advanced grading page after activity creation.
+global $SESSION, $CFG;
+if (!empty($SESSION->videoassessment_redirect_to_grading) && $SESSION->videoassessment_redirect_to_grading == $cm->instance) {
+    unset($SESSION->videoassessment_redirect_to_grading);
+
+    // Get the grading area ID for the teacher grading area.
+    require_once($CFG->dirroot . '/grade/grading/lib.php');
+    $gradingmanager = get_grading_manager($context, 'mod_videoassessment', 'beforeteacher');
+    $areaid = $gradingmanager->get_areaid();
+
+    if ($areaid) {
+        redirect(new moodle_url('/grade/grading/manage.php', ['areaid' => $areaid]));
+    }
+}
+
 // Trigger standard "viewed" event.
 $videoassessment = $DB->get_record('videoassessment', ['id' => $cm->instance], '*', MUST_EXIST);
 $event = \mod_videoassessment\event\course_module_viewed::create([

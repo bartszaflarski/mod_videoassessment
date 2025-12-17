@@ -41,6 +41,13 @@ defined('MOODLE_INTERNAL') || die();
  */
 class renderer extends plugin_renderer_base {
     /**
+     * Video assessment instance object.
+     *
+     * @var va|null
+     */
+    public $va = null;
+
+    /**
      * Render a renderable object using appropriate method.
      *
      * Routes renderable objects to their specific render methods
