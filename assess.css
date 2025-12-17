@@ -260,23 +260,27 @@
 /* Mobile responsive rubric - convert table columns to rows */
 @media (max-width: 768px) {
     /* Make the rubric container full width */
-    .path-mod-videoassessment .gradingform_rubric {
+    .path-mod-videoassessment .gradingform_rubric,
+    .gradingform_rubric {
         width: 100% !important;
         overflow-x: visible !important;
     }
 
-    .path-mod-videoassessment form.gradingform {
+    .path-mod-videoassessment form.gradingform,
+    form.gradingform {
         width: 100% !important;
         float: none !important;
     }
 
-    .path-mod-videoassessment .assess-form-videos {
+    .path-mod-videoassessment .assess-form-videos,
+    .assess-form-videos {
         float: none !important;
         width: 100% !important;
         margin: 0 0 20px 0 !important;
     }
 
-    .path-mod-videoassessment .gradingform {
+    .path-mod-videoassessment .gradingform,
+    .gradingform {
         float: none !important;
         margin-left: 0 !important;
         min-height: auto !important;
@@ -284,31 +288,37 @@
 
     /* Convert main rubric table to block layout */
     .gradingform_rubric table.criteria,
-    .gradingform_rubric .criteria {
+    .gradingform_rubric .criteria,
+    table.criteria {
         display: block !important;
         width: 100% !important;
     }
 
     .gradingform_rubric table.criteria > tbody,
-    .gradingform_rubric .criteria > tbody {
+    .gradingform_rubric .criteria > tbody,
+    table.criteria > tbody {
         display: block !important;
     }
 
     /* Each criterion row becomes a card */
     .gradingform_rubric table.criteria > tbody > tr.criterion,
     .gradingform_rubric .criteria > tbody > tr.criterion,
-    .gradingform_rubric tr.criterion {
+    .gradingform_rubric tr.criterion,
+    tr.criterion {
         display: block !important;
         margin-bottom: 20px !important;
         border: none !important;
         border-radius: 8px !important;
         overflow: hidden !important;
         background: #fff !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
     }
 
     /* Criterion description cell becomes header */
     .gradingform_rubric tr.criterion > td.description,
-    .gradingform_rubric .criterion .description {
+    .gradingform_rubric .criterion .description,
+    tr.criterion > td.description,
+    td.description {
         display: block !important;
         width: 100% !important;
         background: #343a40 !important;
@@ -320,42 +330,52 @@
         box-sizing: border-box !important;
     }
 
-    /* The nested levels table - convert to block */
-    .gradingform_rubric tr.criterion > td:not(.description):not(.remark),
-    .gradingform_rubric .criterion > td:not(.description):not(.remark) {
+    /* The levels cell container - convert to block */
+    .gradingform_rubric tr.criterion > td.levels,
+    tr.criterion > td.levels,
+    td.levels {
         display: block !important;
         width: 100% !important;
         padding: 0 !important;
         border: none !important;
     }
 
-    .gradingform_rubric tr.criterion table,
-    .gradingform_rubric .criterion table,
-    .gradingform_rubric .criterion .levels table {
+    /* The nested levels table - convert to block */
+    .gradingform_rubric tr.criterion td.levels table,
+    .gradingform_rubric .criterion .levels table,
+    tr.criterion td.levels table,
+    td.levels table {
         display: block !important;
         width: 100% !important;
         border: none !important;
     }
 
-    .gradingform_rubric tr.criterion table tbody,
-    .gradingform_rubric .criterion table tbody,
-    .gradingform_rubric .criterion .levels table tbody {
+    .gradingform_rubric tr.criterion td.levels table tbody,
+    tr.criterion td.levels table tbody,
+    td.levels table tbody {
         display: block !important;
         width: 100% !important;
     }
 
-    .gradingform_rubric tr.criterion table tr,
-    .gradingform_rubric .criterion table tr {
-        display: block !important;
+    /* The row containing all levels - make it flex column so td children stack */
+    .gradingform_rubric tr.criterion td.levels table tr,
+    tr.criterion td.levels table tr,
+    td.levels table tr,
+    td.levels > table > tbody > tr {
+        display: flex !important;
+        flex-direction: column !important;
         width: 100% !important;
         border: none !important;
     }
 
     /* Each level cell becomes a full-width row */
-    .gradingform_rubric tr.criterion table td.level,
-    .gradingform_rubric .criterion table td.level,
-    .gradingform_rubric .criterion .levels .level,
-    .gradingform_rubric td.level {
+    .gradingform_rubric tr.criterion td.levels table td.level,
+    .gradingform_rubric td.level,
+    tr.criterion td.levels table td.level,
+    td.levels table td.level,
+    td.level,
+    td.levels > table > tbody > tr > td.level,
+    .gradingform_rubric td.levels > table > tbody > tr > td {
         display: flex !important;
         flex-wrap: wrap !important;
         flex-direction: column !important;
@@ -363,20 +383,26 @@
         justify-content: center !important;
         width: 100% !important;
         max-width: 100% !important;
+        min-width: 100% !important;
         padding: 15px !important;
         border: none !important;
+        border-bottom: 1px solid #e9ecef !important;
         box-sizing: border-box !important;
         min-height: auto !important;
         cursor: pointer !important;
         text-align: center !important;
+        background: #fff !important;
     }
 
+    td.level:last-of-type,
     .gradingform_rubric td.level:last-of-type {
-        border: none !important;
+        border-bottom: none !important;
     }
 
     /* Score badge styling - show first/prominently */
-    .gradingform_rubric td.level .score {
+    .gradingform_rubric td.level .score,
+    td.level .score,
+    td.level .score.d-inline {
         order: -1 !important;
         display: inline-flex !important;
         align-items: center !important;
@@ -390,60 +416,92 @@
         margin: 5px auto 8px auto !important;
         min-width: 80px !important;
         flex-shrink: 0 !important;
-        width: 100% !important;
-        max-width: 120px !important;
+        width: auto !important;
+        max-width: 150px !important;
     }
 
     /* Level definition text */
-    .gradingform_rubric td.level .definition {
+    .gradingform_rubric td.level .definition,
+    td.level .definition {
         width: 100% !important;
         word-break: normal !important;
         font-size: 14px !important;
         line-height: 1.5 !important;
         margin: 0 !important;
         text-align: center !important;
+        order: 1 !important;
+    }
+
+    /* Level wrapper inside each level */
+    .gradingform_rubric td.level .level-wrapper,
+    td.level .level-wrapper {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        width: 100% !important;
+    }
+
+    /* Hide the radio button visually but keep it functional */
+    .gradingform_rubric td.level .radio,
+    td.level .radio {
+        position: absolute !important;
+        opacity: 0 !important;
+        width: 1px !important;
+        height: 1px !important;
+        overflow: hidden !important;
     }
 
     /* Selected/checked level styling */
     .gradingform_rubric td.level.checked,
-    .gradingform_rubric td.level.currentchecked {
+    .gradingform_rubric td.level.currentchecked,
+    td.level.checked,
+    td.level.currentchecked {
         background: #d4edda !important;
         border-left: 5px solid #28a745 !important;
         padding-left: 10px !important;
     }
 
     .gradingform_rubric td.level.checked .score,
-    .gradingform_rubric td.level.currentchecked .score {
+    .gradingform_rubric td.level.currentchecked .score,
+    td.level.checked .score,
+    td.level.currentchecked .score {
         background: #28a745 !important;
     }
 
     /* Hover state for levels */
-    .gradingform_rubric td.level:hover {
-        background: transparent !important;
+    .gradingform_rubric td.level:hover,
+    td.level:hover {
+        background: #f8f9fa !important;
     }
 
     .gradingform_rubric td.level.checked:hover,
-    .gradingform_rubric td.level.currentchecked:hover {
+    .gradingform_rubric td.level.currentchecked:hover,
+    td.level.checked:hover,
+    td.level.currentchecked:hover {
         background: #c3e6cb !important;
     }
 
     /* Hide the radio indicator since we have the score badge */
-    .gradingform_rubric td.level::before {
+    .gradingform_rubric td.level::before,
+    td.level::before {
         display: none !important;
     }
 
     /* Remark/comment cell */
     .gradingform_rubric tr.criterion > td.remark,
-    .gradingform_rubric .criterion .remark {
+    .gradingform_rubric .criterion .remark,
+    tr.criterion > td.remark,
+    td.remark {
         display: block !important;
         width: 100% !important;
         padding: 15px !important;
-        background: transparent !important;
+        background: #f8f9fa !important;
         box-sizing: border-box !important;
         border: none !important;
     }
 
-    .gradingform_rubric .remark textarea {
+    .gradingform_rubric .remark textarea,
+    td.remark textarea {
         width: 100% !important;
         min-height: 80px !important;
         box-sizing: border-box !important;
@@ -454,7 +512,8 @@
 
     /* Hide table header on mobile if present */
     .gradingform_rubric table.criteria > thead,
-    .gradingform_rubric .criteria > thead {
+    .gradingform_rubric .criteria > thead,
+    table.criteria > thead {
         display: none !important;
     }
 
@@ -476,4 +535,8 @@
         overflow-x: visible !important;
     }
 
+    /* Clearfix container */
+    .clearfix.gradingform_rubric {
+        display: block !important;
+    }
 }
