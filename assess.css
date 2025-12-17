@@ -256,3 +256,224 @@
 #training-result-table-render {
     display: none;
 }
+
+/* Mobile responsive rubric - convert table columns to rows */
+@media (max-width: 768px) {
+    /* Make the rubric container full width */
+    .path-mod-videoassessment .gradingform_rubric {
+        width: 100% !important;
+        overflow-x: visible !important;
+    }
+
+    .path-mod-videoassessment form.gradingform {
+        width: 100% !important;
+        float: none !important;
+    }
+
+    .path-mod-videoassessment .assess-form-videos {
+        float: none !important;
+        width: 100% !important;
+        margin: 0 0 20px 0 !important;
+    }
+
+    .path-mod-videoassessment .gradingform {
+        float: none !important;
+        margin-left: 0 !important;
+        min-height: auto !important;
+    }
+
+    /* Convert main rubric table to block layout */
+    .gradingform_rubric table.criteria,
+    .gradingform_rubric .criteria {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .gradingform_rubric table.criteria > tbody,
+    .gradingform_rubric .criteria > tbody {
+        display: block !important;
+    }
+
+    /* Each criterion row becomes a card */
+    .gradingform_rubric table.criteria > tbody > tr.criterion,
+    .gradingform_rubric .criteria > tbody > tr.criterion,
+    .gradingform_rubric tr.criterion {
+        display: block !important;
+        margin-bottom: 20px !important;
+        border: none !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        background: #fff !important;
+    }
+
+    /* Criterion description cell becomes header */
+    .gradingform_rubric tr.criterion > td.description,
+    .gradingform_rubric .criterion .description {
+        display: block !important;
+        width: 100% !important;
+        background: #343a40 !important;
+        color: #fff !important;
+        padding: 12px 15px !important;
+        font-weight: bold !important;
+        font-size: 16px !important;
+        border: none !important;
+        box-sizing: border-box !important;
+    }
+
+    /* The nested levels table - convert to block */
+    .gradingform_rubric tr.criterion > td:not(.description):not(.remark),
+    .gradingform_rubric .criterion > td:not(.description):not(.remark) {
+        display: block !important;
+        width: 100% !important;
+        padding: 0 !important;
+        border: none !important;
+    }
+
+    .gradingform_rubric tr.criterion table,
+    .gradingform_rubric .criterion table,
+    .gradingform_rubric .criterion .levels table {
+        display: block !important;
+        width: 100% !important;
+        border: none !important;
+    }
+
+    .gradingform_rubric tr.criterion table tbody,
+    .gradingform_rubric .criterion table tbody,
+    .gradingform_rubric .criterion .levels table tbody {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    .gradingform_rubric tr.criterion table tr,
+    .gradingform_rubric .criterion table tr {
+        display: block !important;
+        width: 100% !important;
+        border: none !important;
+    }
+
+    /* Each level cell becomes a full-width row */
+    .gradingform_rubric tr.criterion table td.level,
+    .gradingform_rubric .criterion table td.level,
+    .gradingform_rubric .criterion .levels .level,
+    .gradingform_rubric td.level {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 15px !important;
+        border: none !important;
+        box-sizing: border-box !important;
+        min-height: auto !important;
+        cursor: pointer !important;
+        text-align: center !important;
+    }
+
+    .gradingform_rubric td.level:last-of-type {
+        border: none !important;
+    }
+
+    /* Score badge styling - show first/prominently */
+    .gradingform_rubric td.level .score {
+        order: -1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #6c757d !important;
+        color: #fff !important;
+        padding: 8px 16px !important;
+        border-radius: 20px !important;
+        font-size: 14px !important;
+        font-weight: bold !important;
+        margin: 5px auto 8px auto !important;
+        min-width: 80px !important;
+        flex-shrink: 0 !important;
+        width: 100% !important;
+        max-width: 120px !important;
+    }
+
+    /* Level definition text */
+    .gradingform_rubric td.level .definition {
+        width: 100% !important;
+        word-break: normal !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+        margin: 0 !important;
+        text-align: center !important;
+    }
+
+    /* Selected/checked level styling */
+    .gradingform_rubric td.level.checked,
+    .gradingform_rubric td.level.currentchecked {
+        background: #d4edda !important;
+        border-left: 5px solid #28a745 !important;
+        padding-left: 10px !important;
+    }
+
+    .gradingform_rubric td.level.checked .score,
+    .gradingform_rubric td.level.currentchecked .score {
+        background: #28a745 !important;
+    }
+
+    /* Hover state for levels */
+    .gradingform_rubric td.level:hover {
+        background: transparent !important;
+    }
+
+    .gradingform_rubric td.level.checked:hover,
+    .gradingform_rubric td.level.currentchecked:hover {
+        background: #c3e6cb !important;
+    }
+
+    /* Hide the radio indicator since we have the score badge */
+    .gradingform_rubric td.level::before {
+        display: none !important;
+    }
+
+    /* Remark/comment cell */
+    .gradingform_rubric tr.criterion > td.remark,
+    .gradingform_rubric .criterion .remark {
+        display: block !important;
+        width: 100% !important;
+        padding: 15px !important;
+        background: transparent !important;
+        box-sizing: border-box !important;
+        border: none !important;
+    }
+
+    .gradingform_rubric .remark textarea {
+        width: 100% !important;
+        min-height: 80px !important;
+        box-sizing: border-box !important;
+        border: 1px solid #ced4da !important;
+        border-radius: 4px !important;
+        padding: 10px !important;
+    }
+
+    /* Hide table header on mobile if present */
+    .gradingform_rubric table.criteria > thead,
+    .gradingform_rubric .criteria > thead {
+        display: none !important;
+    }
+
+    /* Adjust video preview area */
+    #training-result-wrap {
+        float: none !important;
+        width: 100% !important;
+    }
+
+    /* Fix form item widths */
+    #fitem_id_advancedgradingbefore,
+    #fitem_id_advancedgradingafter {
+        overflow-x: visible !important;
+    }
+
+    #fitem_id_advancedgradingbefore .felement,
+    #fitem_id_advancedgradingafter .felement {
+        width: 100% !important;
+        overflow-x: visible !important;
+    }
+
+}
