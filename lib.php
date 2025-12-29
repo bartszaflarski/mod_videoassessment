@@ -89,29 +89,20 @@ function videoassessment_add_instance($va, $form) {
     videoassessment_update_calendar($va);
 
     // Process peer assignments from the form.
-    if (isset($va->peerassignments)) {
-        // Debug: Log the peer assignments value.
-        debugging('Peer assignments value: ' . $va->peerassignments, DEBUG_DEVELOPER);
-        if ($va->peerassignments !== '' && $va->peerassignments !== '{}') {
-            videoassessment_save_peer_assignments($va->id, $va->peerassignments);
-        }
-    } else {
-        debugging('Peer assignments not set in form data', DEBUG_DEVELOPER);
+    if (isset($va->peerassignments) && $va->peerassignments !== '' && $va->peerassignments !== '{}') {
+        videoassessment_save_peer_assignments($va->id, $va->peerassignments);
     }
 
-    // Check if rubric grading method is selected and set session flag for redirect.
-    $rubricselected = false;
-    foreach (['beforeteacher', 'beforetraining', 'beforepeer', 'beforeclass', 'beforeself'] as $area) {
-        $fieldname = 'advancedgradingmethod_' . $area;
-        if (isset($va->$fieldname) && $va->$fieldname === 'rubric') {
-            $rubricselected = true;
-            break;
-        }
-    }
-
-    if ($rubricselected) {
-        global $SESSION;
-        $SESSION->videoassessment_redirect_to_grading = $va->id;
+    // Check if "Save and create rubric" button was clicked.
+    // Check both the form data and $_POST since submit button values may not be in $va.
+    $rubricbuttonclicked = !empty($va->redirect_to_rubric) || 
+                           !empty($va->submitbutton_rubric) || 
+                           isset($_POST['submitbutton_rubric']) ||
+                           (isset($_POST['redirect_to_rubric']) && $_POST['redirect_to_rubric'] == '1');
+    
+    if ($rubricbuttonclicked) {
+        // Use user preference instead of session to avoid "session mutated after closed" error.
+        set_user_preference('videoassessment_redirect_to_grading', $va->id);
     }
 
     return $va->id;
@@ -239,6 +230,16 @@ function videoassessment_update_instance($va, $form) {
     // Process peer assignments from the form.
     if (isset($va->peerassignments) && $va->peerassignments !== '' && $va->peerassignments !== '{}') {
         videoassessment_save_peer_assignments($va->id, $va->peerassignments);
+    }
+
+    // Check if "Save and create rubric" button was clicked.
+    $rubricbuttonclicked = !empty($va->redirect_to_rubric) || 
+                           !empty($va->submitbutton_rubric) || 
+                           isset($_POST['submitbutton_rubric']) ||
+                           (isset($_POST['redirect_to_rubric']) && $_POST['redirect_to_rubric'] == '1');
+    if ($rubricbuttonclicked) {
+        // Use user preference instead of session to avoid "session mutated after closed" error.
+        set_user_preference('videoassessment_redirect_to_grading', $va->id);
     }
 
     return true;
@@ -681,6 +682,71 @@ function mod_videoassessment_get_fontawesome_icon_map() {
         'mod_book:nav_next' => 'fa-arrow-right',
         'mod_book:nav_exit' => 'fa-arrow-up',
     ];
+}
+
+/**
+ * Add page requirements for videoassessment module.
+ * 
+ * This function is called for course pages and allows us to inject
+ * JavaScript that checks for pending grading redirects.
+ *
+ * @param cm_info $cm Course module info object
+ * @return void
+ */
+function videoassessment_cm_info_view(cm_info $cm) {
+    global $PAGE, $CFG;
+    
+    // Check if there's a pending redirect to grading page.
+    // This handles the case where "Save and create rubric" was clicked.
+    static $redirectChecked = false;
+    if (!$redirectChecked) {
+        $redirectChecked = true;
+        
+        // Add inline JavaScript to check sessionStorage and redirect if needed.
+        // The redirect only happens if BOTH conditions are met:
+        // 1. sessionStorage has the flag (set by the form submission JS)
+        // 2. Server has the user preference (set by lib.php)
+        // This double-check prevents redirect loops.
+        $checkUrl = $CFG->wwwroot . '/mod/videoassessment/check_grading_redirect.php';
+        $inlineJs = "
+            (function() {
+                var redirectData = sessionStorage.getItem('videoassessment_check_grading_redirect');
+                
+                // Only proceed if we have the sessionStorage flag.
+                if (!redirectData) {
+                    return;
+                }
+                
+                // Remove immediately to prevent any possibility of re-triggering.
+                sessionStorage.removeItem('videoassessment_check_grading_redirect');
+                
+                // Parse the stored data (timestamp).
+                var storedTime = parseInt(redirectData, 10);
+                var now = Date.now();
+                
+                // Only proceed if the redirect was set less than 10 seconds ago.
+                if (now - storedTime > 10000) {
+                    console.log('Grading redirect expired');
+                    return;
+                }
+                
+                console.log('Checking grading redirect...');
+                fetch('{$checkUrl}', {credentials: 'same-origin'})
+                    .then(function(response) { return response.json(); })
+                    .then(function(data) {
+                        console.log('Redirect check response:', data);
+                        if (data.redirect && data.url) {
+                            console.log('Redirecting to:', data.url);
+                            window.location.replace(data.url);
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Redirect check error:', error);
+                    });
+            })();
+        ";
+        $PAGE->requires->js_init_code($inlineJs, false);
+    }
 }
 
 /**

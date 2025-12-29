@@ -12,6 +12,7 @@ define(['jquery'], function($) {
     let cmid = 0;
     let sesskey = '';
     let usedpeers = 0;
+    let groups = {};
 
     /**
      * Update the hidden form field with current peer assignments.
@@ -36,6 +37,16 @@ define(['jquery'], function($) {
     }
 
     /**
+     * Get the current maximum number of peers allowed per user.
+     *
+     * @return {number} The maximum number of peers (0 = unlimited)
+     */
+    function getMaxPeers() {
+        const val = parseInt($('#id_usedpeers').val());
+        return isNaN(val) ? usedpeers : val;
+    }
+
+    /**
      * Add a peer to a user.
      *
      * @param {number} userid - The user ID
@@ -45,6 +56,13 @@ define(['jquery'], function($) {
         console.log('Adding peer:', peerid, 'to user:', userid);
         if (!peerAssignments[userid]) {
             peerAssignments[userid] = [];
+        }
+
+        // Check if we've reached the maximum number of peers.
+        const maxPeers = getMaxPeers();
+        if (maxPeers > 0 && peerAssignments[userid].length >= maxPeers) {
+            console.log('Maximum peers reached for user:', userid, '(limit:', maxPeers, ')');
+            return; // Don't add more peers.
         }
 
         if (peerAssignments[userid].indexOf(peerid) === -1) {
@@ -84,6 +102,8 @@ define(['jquery'], function($) {
         container.empty();
 
         const userPeers = peerAssignments[userid] || [];
+        const maxPeers = getMaxPeers();
+        const atLimit = maxPeers > 0 && userPeers.length >= maxPeers;
 
         userPeers.forEach(function(peerid) {
             if (students[peerid]) {
@@ -103,26 +123,35 @@ define(['jquery'], function($) {
             }
         });
 
-        // Update the dropdown to disable already assigned peers.
+        // Update the dropdown - disable if at limit or if peer already assigned.
         const select = $('select.add-peer-select[data-userid="' + userid + '"]');
-        select.find('option').each(function() {
-            const optionValue = parseInt($(this).val());
-            if (optionValue && userPeers.indexOf(optionValue) > -1) {
-                $(this).prop('disabled', true);
-            } else {
-                $(this).prop('disabled', false);
-            }
-        });
+
+        if (atLimit) {
+            // Disable the entire dropdown when limit is reached.
+            select.prop('disabled', true);
+            select.css('opacity', '0.5');
+        } else {
+            select.prop('disabled', false);
+            select.css('opacity', '1');
+
+            // Enable/disable individual options based on whether already assigned.
+            select.find('option').each(function() {
+                const optionValue = parseInt($(this).val());
+                if (optionValue && userPeers.indexOf(optionValue) > -1) {
+                    $(this).prop('disabled', true);
+                } else {
+                    $(this).prop('disabled', false);
+                }
+            });
+        }
         select.val('');
     }
 
     /**
-     * Assign peers randomly across all students.
-     *
-     * @param {string} mode - 'course' or 'group'
+     * Assign peers randomly across all students (course-wide).
      */
-    function assignRandomPeers(mode) {
-        // Get number of peers from the usedpeers select.
+    function assignRandomPeersCourse() {
+        // Get number of peers from the usedpeers input.
         let numPeers = parseInt($('#id_usedpeers').val()) || usedpeers;
         if (numPeers <= 0) {
             numPeers = 1; // Default to 1 if not set.
@@ -169,6 +198,65 @@ define(['jquery'], function($) {
     }
 
     /**
+     * Assign peers randomly within a specific group.
+     *
+     * @param {number} groupId - The group ID to assign peers within
+     */
+    function assignRandomPeersGroup(groupId) {
+        // Get number of peers from the usedpeers input.
+        let numPeers = parseInt($('#id_usedpeers').val()) || usedpeers;
+        if (numPeers <= 0) {
+            numPeers = 1; // Default to 1 if not set.
+        }
+
+        // Get group data.
+        const group = groups[groupId];
+        if (!group) {
+            alert('Group not found.');
+            return;
+        }
+
+        const groupMembers = group.members || [];
+        if (groupMembers.length <= numPeers) {
+            alert('Not enough students in group "' + group.name + '" to assign ' + numPeers + ' peers each.');
+            return;
+        }
+
+        // Confirm before proceeding.
+        if (!confirm('This will reset peer assignments for students in "' + group.name + '" and assign ' + numPeers + ' random peer(s) from within the group. Continue?')) {
+            return;
+        }
+
+        // Clear existing assignments for group members only.
+        groupMembers.forEach(function(userid) {
+            peerAssignments[userid] = [];
+        });
+
+        // Assign peers only from within the group.
+        groupMembers.forEach(function(userid) {
+            const availablePeers = groupMembers.filter(function(id) {
+                return id !== userid;
+            });
+
+            // Shuffle available peers.
+            for (let i = availablePeers.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [availablePeers[i], availablePeers[j]] = [availablePeers[j], availablePeers[i]];
+            }
+
+            // Assign the first numPeers.
+            peerAssignments[userid] = availablePeers.slice(0, numPeers);
+        });
+
+        // Re-render group members only.
+        groupMembers.forEach(function(userid) {
+            renderPeersForUser(userid);
+        });
+
+        updateHiddenField();
+    }
+
+    /**
      * Initialize the peer assignment interface.
      *
      * @param {Object} params - Initialization parameters
@@ -184,8 +272,10 @@ define(['jquery'], function($) {
                 cmid = params.cmid || 0;
                 sesskey = params.sesskey || '';
                 usedpeers = params.usedpeers || 0;
+                groups = params.groups || {};
 
                 console.log('Students:', students);
+                console.log('Groups:', groups);
                 console.log('Initial peerAssignments:', peerAssignments);
 
                 // Convert peer arrays to have numeric keys.
@@ -221,22 +311,48 @@ define(['jquery'], function($) {
                     removePeer(userid, peerid);
                 });
 
-                // Handle random assignment buttons.
+                // Handle random assignment - Course button.
                 const courseBtn = $('#random-peers-course');
                 if (courseBtn.length) {
                     courseBtn.off('click.peerassign');
                     courseBtn.on('click.peerassign', function(e) {
                         e.preventDefault();
-                        assignRandomPeers('course');
+                        assignRandomPeersCourse();
                     });
                 }
 
-                const groupBtn = $('#random-peers-group');
-                if (groupBtn.length) {
-                    groupBtn.off('click.peerassign');
-                    groupBtn.on('click.peerassign', function(e) {
-                        e.preventDefault();
-                        assignRandomPeers('group');
+                // Handle random assignment - Group dropdown items.
+                $(document).off('click.peerassign', '.random-peers-group-item');
+                $(document).on('click.peerassign', '.random-peers-group-item', function(e) {
+                    e.preventDefault();
+                    const groupId = parseInt($(this).data('groupid'));
+                    assignRandomPeersGroup(groupId);
+                });
+
+                // Listen for changes to Number of Peer Assessors to trim excess peers and update dropdowns.
+                const usedPeersInput = $('#id_usedpeers');
+                if (usedPeersInput.length) {
+                    usedPeersInput.on('change keyup blur', function() {
+                        const maxPeers = getMaxPeers();
+                        
+                        // If maxPeers > 0, trim excess peers from all users.
+                        if (maxPeers > 0) {
+                            Object.keys(peerAssignments).forEach(function(userid) {
+                                const userPeers = peerAssignments[userid] || [];
+                                if (userPeers.length > maxPeers) {
+                                    // Remove excess peers from the end.
+                                    peerAssignments[userid] = userPeers.slice(0, maxPeers);
+                                }
+                            });
+                        }
+                        
+                        // Re-render all users to update UI.
+                        Object.keys(students).forEach(function(userid) {
+                            renderPeersForUser(parseInt(userid));
+                        });
+                        
+                        // Update the hidden field with trimmed assignments.
+                        updateHiddenField();
                     });
                 }
 

@@ -590,7 +590,7 @@ class va {
         $o .= groups_print_activity_menu($this->cm, $url, true);
 
         $o .= \html_writer::start_tag('div', array('class' => 'right'))
-            . self::str('assignpeersrandomly')
+            . self::str('assignpeerassessorsrandomly')
             . ': ' . $this->output->action_link(
                     $this->get_view_url('randompeer', array('peermode' => 'course', 'sesskey' => sesskey())),
                     self::str('course'),

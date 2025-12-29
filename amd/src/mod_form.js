@@ -238,11 +238,232 @@ define(['jquery'], function ($) {
         $('#id_isafterduedate').parent().css('width', 'auto');
     }
 
+    /**
+     * Initializes the visibility toggle and syncing for Assign Peer Assessors section.
+     *
+     * - Shows or hides the peer assessors section based on Peer % and Number of Peer Assessors
+     * - When Peer % is set to 0, Number of Peer Assessors is set to 0 and vice versa
+     * - Section is shown by default (when Peer % > 0)
+     */
+    function initPeerAssessorsVisibility() {
+        const peerRating = $('#id_ratingpeer');
+        const usedPeers = $('#id_usedpeers');
+        const container = $('#assign-peer-assessors-container');
+
+        if (!container.length || !peerRating.length || !usedPeers.length) {
+            return;
+        }
+
+        // Track if we're currently syncing to prevent infinite loops.
+        let isSyncing = false;
+
+        /**
+         * Update the visibility of the peer assessors container.
+         */
+        const updateVisibility = () => {
+            const peerRatingVal = parseInt(peerRating.val()) || 0;
+            const usedPeersVal = parseInt(usedPeers.val()) || 0;
+
+            if (peerRatingVal === 0 && usedPeersVal === 0) {
+                container.slideUp(200);
+            } else {
+                container.slideDown(200);
+            }
+        };
+
+        /**
+         * When Peer % changes to 0, set Number of Peer Assessors to 0.
+         * When Peer % changes from 0 to > 0, set Number of Peer Assessors to 2 (if it was 0).
+         */
+        const syncFromPeerRating = () => {
+            if (isSyncing) return;
+            isSyncing = true;
+
+            const peerRatingVal = parseInt(peerRating.val()) || 0;
+            const usedPeersVal = parseInt(usedPeers.val()) || 0;
+
+            if (peerRatingVal === 0) {
+                // Peer % is 0, set Number of Peer Assessors to 0.
+                usedPeers.val(0);
+            } else if (peerRatingVal > 0 && usedPeersVal === 0) {
+                // Peer % is > 0 but Number of Peer Assessors is 0, set to default 2.
+                usedPeers.val(2);
+            }
+
+            updateVisibility();
+            isSyncing = false;
+        };
+
+        /**
+         * When Number of Peer Assessors changes to 0, set Peer % to 0.
+         * When Number of Peer Assessors changes from 0 to > 0, set Peer % to 10 (if it was 0).
+         */
+        const syncFromUsedPeers = () => {
+            if (isSyncing) return;
+            isSyncing = true;
+
+            const peerRatingVal = parseInt(peerRating.val()) || 0;
+            const usedPeersVal = parseInt(usedPeers.val()) || 0;
+
+            if (usedPeersVal === 0) {
+                // Number of Peer Assessors is 0, set Peer % to 0.
+                peerRating.val(0);
+            } else if (usedPeersVal > 0 && peerRatingVal === 0) {
+                // Number of Peer Assessors is > 0 but Peer % is 0, set to default 10.
+                peerRating.val(10);
+            }
+
+            updateVisibility();
+            isSyncing = false;
+        };
+
+        // Initial state - show container since default Peer % is 10.
+        updateVisibility();
+
+        // Listen for changes on Peer %.
+        peerRating.on('change', syncFromPeerRating);
+
+        // Listen for changes on Number of Peer Assessors.
+        usedPeers.on('change blur', syncFromUsedPeers);
+        usedPeers.on('keyup', function() {
+            // Delay keyup to avoid syncing on every keystroke.
+            clearTimeout($(this).data('syncTimeout'));
+            $(this).data('syncTimeout', setTimeout(syncFromUsedPeers, 500));
+        });
+    }
+
+    /**
+     * Initializes the visibility of the "Save and create rubric" button.
+     *
+     * Shows the button only when "rubric" is selected as the grading method.
+     * Also sets up the click handler to set the redirect flag and submit the form.
+     */
+    function initRubricButtonVisibility() {
+        // Find the grading method select (it's the first advancedgradingmethod_ field).
+        const gradingMethodSelect = $('select[name^="advancedgradingmethod_"]').first();
+        const rubricButton = $('#id_submitbutton_rubric');
+        const redirectField = $('input[name="redirect_to_rubric"]');
+        const submitButton2 = $('#id_submitbutton2'); // Save and display button
+
+        if (!rubricButton.length) {
+            return;
+        }
+
+        /**
+         * Update the visibility of the rubric button.
+         */
+        const updateVisibility = () => {
+            if (gradingMethodSelect.length) {
+                const selectedMethod = gradingMethodSelect.val();
+                if (selectedMethod === 'rubric') {
+                    rubricButton.show();
+                } else {
+                    rubricButton.hide();
+                }
+            } else {
+                // No grading method select found, hide the button.
+                rubricButton.hide();
+            }
+        };
+
+        // Initial state.
+        updateVisibility();
+
+        // Listen for changes.
+        if (gradingMethodSelect.length) {
+            gradingMethodSelect.on('change', updateVisibility);
+        }
+
+        // When rubric button is clicked, set a flag and submit the form normally.
+        // The redirect will happen via user preference which is checked by an AJAX call after page load.
+        rubricButton.on('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Rubric button clicked');
+            
+            // Set the redirect flag in the form.
+            let field = $('input[name="redirect_to_rubric"]');
+            if (field.length) {
+                field.val('1');
+            } else {
+                field = $('<input type="hidden" name="redirect_to_rubric" value="1">');
+                $('form.mform').append(field);
+            }
+            
+            // Store the intent in sessionStorage with a timestamp.
+            // This ensures the redirect only works for a short time (30 seconds) to prevent loops.
+            sessionStorage.setItem('videoassessment_check_grading_redirect', Date.now().toString());
+            
+            // Find the form.
+            const form = $('form.mform');
+            if (!form.length) {
+                console.error('Form not found');
+                return;
+            }
+            
+            // Add submitbutton for "Save and return to course" behavior.
+            // We'll handle the redirect via AJAX after the page loads.
+            form.find('input[name="submitbutton"][type="hidden"]').remove();
+            form.append('<input type="hidden" name="submitbutton" value="1">');
+            
+            console.log('Submitting form with redirect_to_rubric flag');
+            
+            // Submit the form normally.
+            form[0].submit();
+        });
+    }
+
+    /**
+     * Check if we need to redirect to the grading page after activity creation.
+     * This should be called on every page load to check for pending redirects.
+     */
+    function checkGradingRedirect() {
+        // Check sessionStorage for the redirect flag with timestamp.
+        const redirectData = sessionStorage.getItem('videoassessment_check_grading_redirect');
+        
+        if (redirectData) {
+            const storedTime = parseInt(redirectData, 10);
+            const now = Date.now();
+            
+            // Only proceed if the redirect was set less than 30 seconds ago.
+            if (now - storedTime < 30000) {
+                // Clear the flag immediately.
+                sessionStorage.removeItem('videoassessment_check_grading_redirect');
+                
+                console.log('Checking for grading redirect via AJAX...');
+                
+                // Call the AJAX endpoint to check if redirect is needed.
+                $.ajax({
+                    url: M.cfg.wwwroot + '/mod/videoassessment/check_grading_redirect.php',
+                    method: 'GET',
+                    dataType: 'json',
+                    success: function(response) {
+                        console.log('Grading redirect response:', response);
+                        if (response.redirect && response.url) {
+                            console.log('Redirecting to:', response.url);
+                            window.location.replace(response.url);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error checking grading redirect:', error);
+                    }
+                });
+            } else {
+                // Expired, just remove it.
+                sessionStorage.removeItem('videoassessment_check_grading_redirect');
+            }
+        }
+    }
+
     return {
         initTrainingChange: initTrainingChange,
         initQuickSetupPeerChange: initQuickSetupPeerChange,
         initFairnessBonusChange: initFairnessBonusChange,
         initUploadTypeChange: initUploadTypeChange,
-        initNotificationFormChange: initNotificationFormChange
+        initNotificationFormChange: initNotificationFormChange,
+        initPeerAssessorsVisibility: initPeerAssessorsVisibility,
+        initRubricButtonVisibility: initRubricButtonVisibility,
+        checkGradingRedirect: checkGradingRedirect
     };
 });

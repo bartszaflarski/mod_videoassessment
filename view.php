@@ -157,17 +157,49 @@ $context = context_module::instance($cm->id);
 require_capability('mod/videoassessment:view', $context);
 
 // Check if we need to redirect to advanced grading page after activity creation.
-global $SESSION, $CFG;
-if (!empty($SESSION->videoassessment_redirect_to_grading) && $SESSION->videoassessment_redirect_to_grading == $cm->instance) {
-    unset($SESSION->videoassessment_redirect_to_grading);
+// Check both URL parameter and user preference.
+global $CFG;
+$redirect_to_grading = get_user_preferences('videoassessment_redirect_to_grading');
+$redirecttograding_param = optional_param('redirecttograding', 0, PARAM_INT);
 
-    // Get the grading area ID for the teacher grading area.
+// Determine if we should redirect.
+$should_redirect = false;
+if ($redirecttograding_param == 1) {
+    $should_redirect = true;
+} elseif (!empty($redirect_to_grading) && (int)$redirect_to_grading === (int)$cm->instance) {
+    $should_redirect = true;
+}
+
+if ($should_redirect) {
+    // Clear the preference if set.
+    if (!empty($redirect_to_grading)) {
+        unset_user_preference('videoassessment_redirect_to_grading');
+    }
+
+    // Use the grading manager to ensure the area exists and get its ID.
     require_once($CFG->dirroot . '/grade/grading/lib.php');
     $gradingmanager = get_grading_manager($context, 'mod_videoassessment', 'beforeteacher');
-    $areaid = $gradingmanager->get_areaid();
 
-    if ($areaid) {
-        redirect(new moodle_url('/grade/grading/manage.php', ['areaid' => $areaid]));
+    // Get the grading area ID - the manager creates the area if it doesn't exist.
+    $arearecord = $DB->get_record('grading_areas', [
+        'contextid' => $context->id,
+        'component' => 'mod_videoassessment',
+        'areaname' => 'beforeteacher'
+    ]);
+
+    if ($arearecord && $arearecord->id) {
+        redirect(new moodle_url('/grade/grading/manage.php', ['areaid' => $arearecord->id]));
+    } else {
+        // If area still doesn't exist, try to create it by setting the active method.
+        $gradingmanager->set_active_method('rubric');
+        $arearecord = $DB->get_record('grading_areas', [
+            'contextid' => $context->id,
+            'component' => 'mod_videoassessment',
+            'areaname' => 'beforeteacher'
+        ]);
+        if ($arearecord && $arearecord->id) {
+            redirect(new moodle_url('/grade/grading/manage.php', ['areaid' => $arearecord->id]));
+        }
     }
 }
 
