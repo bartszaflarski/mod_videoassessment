@@ -391,9 +391,10 @@ define(['jquery'], function ($) {
                 $('form.mform').append(field);
             }
             
-            // Store the intent in sessionStorage with a timestamp.
-            // This ensures the redirect only works for a short time (30 seconds) to prevent loops.
-            sessionStorage.setItem('videoassessment_check_grading_redirect', Date.now().toString());
+            // Store the intent in sessionStorage with a timestamp and unique token.
+            // The token ensures this specific redirect is only processed once.
+            var token = Math.random().toString(36).substring(2, 15);
+            sessionStorage.setItem('videoassessment_check_grading_redirect', Date.now().toString() + ':' + token);
             
             // Find the form.
             const form = $('form.mform');

@@ -287,14 +287,16 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $mform = &$this->_form;
 
         $buttonarray = [];
-        $buttonarray[] = $mform->createElement('submit', 'submitbutton', get_string('savechangesandreturntocourse'));
-        $buttonarray[] = $mform->createElement('submit', 'submitbutton2', get_string('savechangesanddisplay'));
+        // Note: Moodle's modedit.php redirects to activity view when 'submitbutton' is set,
+        // and to course page otherwise. So we swap the names to match expected behavior.
+        $buttonarray[] = $mform->createElement('submit', 'submitbutton2', get_string('savechangesandreturntocourse'));
+        $buttonarray[] = $mform->createElement('submit', 'submitbutton', get_string('savechangesanddisplay'));
         // The rubric button uses a special class and will set redirect_to_rubric via JS before submitting as submitbutton2.
         $buttonarray[] = $mform->createElement(
             'button',
             'submitbutton_rubric_btn',
             get_string('saveandcreaterubric', 'videoassessment'),
-            ['id' => 'id_submitbutton_rubric', 'type' => 'button', 'class' => 'btn btn-primary']
+            ['id' => 'id_submitbutton_rubric', 'type' => 'button']
         );
         $buttonarray[] = $mform->createElement('cancel');
         $mform->addGroup($buttonarray, 'buttonar', '', [' '], false);

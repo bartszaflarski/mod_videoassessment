@@ -703,10 +703,7 @@ function videoassessment_cm_info_view(cm_info $cm) {
         $redirectChecked = true;
         
         // Add inline JavaScript to check sessionStorage and redirect if needed.
-        // The redirect only happens if BOTH conditions are met:
-        // 1. sessionStorage has the flag (set by the form submission JS)
-        // 2. Server has the user preference (set by lib.php)
-        // This double-check prevents redirect loops.
+        // Uses a unique token to ensure the redirect only happens once.
         $checkUrl = $CFG->wwwroot . '/mod/videoassessment/check_grading_redirect.php';
         $inlineJs = "
             (function() {
@@ -717,11 +714,22 @@ function videoassessment_cm_info_view(cm_info $cm) {
                     return;
                 }
                 
-                // Remove immediately to prevent any possibility of re-triggering.
+                // Parse the data: 'timestamp:token'
+                var parts = redirectData.split(':');
+                var storedTime = parseInt(parts[0], 10);
+                var token = parts[1] || '';
+                
+                // Check if this token was already processed.
+                var processedTokens = JSON.parse(sessionStorage.getItem('videoassessment_processed_tokens') || '[]');
+                if (processedTokens.indexOf(token) !== -1) {
+                    // Already processed this redirect, clean up and exit.
+                    sessionStorage.removeItem('videoassessment_check_grading_redirect');
+                    return;
+                }
+                
+                // Remove the redirect flag immediately.
                 sessionStorage.removeItem('videoassessment_check_grading_redirect');
                 
-                // Parse the stored data (timestamp).
-                var storedTime = parseInt(redirectData, 10);
                 var now = Date.now();
                 
                 // Only proceed if the redirect was set less than 10 seconds ago.
@@ -729,6 +737,14 @@ function videoassessment_cm_info_view(cm_info $cm) {
                     console.log('Grading redirect expired');
                     return;
                 }
+                
+                // Mark this token as processed.
+                processedTokens.push(token);
+                // Keep only last 10 tokens to prevent storage bloat.
+                if (processedTokens.length > 10) {
+                    processedTokens = processedTokens.slice(-10);
+                }
+                sessionStorage.setItem('videoassessment_processed_tokens', JSON.stringify(processedTokens));
                 
                 console.log('Checking grading redirect...');
                 fetch('{$checkUrl}', {credentials: 'same-origin'})
