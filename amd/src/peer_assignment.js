@@ -203,22 +203,39 @@ define(['jquery'], function($) {
      * @param {number} groupId - The group ID to assign peers within
      */
     function assignRandomPeersGroup(groupId) {
+        console.log('assignRandomPeersGroup called with groupId:', groupId, 'type:', typeof groupId);
+        console.log('Available groups:', groups);
+        
         // Get number of peers from the usedpeers input.
         let numPeers = parseInt($('#id_usedpeers').val()) || usedpeers;
         if (numPeers <= 0) {
             numPeers = 1; // Default to 1 if not set.
         }
 
-        // Get group data.
-        const group = groups[groupId];
+        // Convert groupId to number and try both string and number keys.
+        const groupIdNum = parseInt(groupId);
+        let group = groups[groupIdNum] || groups[groupId] || groups[String(groupId)];
+        
         if (!group) {
-            alert('Group not found.');
+            console.error('Group not found. groupId:', groupId, 'groupIdNum:', groupIdNum, 'Available keys:', Object.keys(groups));
+            alert('Group not found. Please try again.');
             return;
         }
+        
+        console.log('Found group:', group);
 
         const groupMembers = group.members || [];
+        // Need at least (numPeers + 1) students in the group to assign numPeers peers to each.
+        // For example: if numPeers = 2, need at least 3 students (each can have 2 others).
         if (groupMembers.length <= numPeers) {
-            alert('Not enough students in group "' + group.name + '" to assign ' + numPeers + ' peers each.');
+            const maxPossiblePeers = Math.max(0, groupMembers.length - 1);
+            let errorMsg = 'Not enough students in group "' + group.name + '" to assign ' + numPeers + ' peer(s) to each student.';
+            if (groupMembers.length > 0) {
+                errorMsg += ' The group has ' + groupMembers.length + ' student(s), so each student can have at most ' + maxPossiblePeers + ' peer(s).';
+            } else {
+                errorMsg += ' The group has no students.';
+            }
+            alert(errorMsg);
             return;
         }
 
@@ -273,6 +290,13 @@ define(['jquery'], function($) {
                 sesskey = params.sesskey || '';
                 usedpeers = params.usedpeers || 0;
                 groups = params.groups || {};
+                
+                // Ensure group IDs are numeric keys for consistency.
+                const numericGroups = {};
+                Object.keys(groups).forEach(function(key) {
+                    numericGroups[parseInt(key)] = groups[key];
+                });
+                groups = numericGroups;
 
                 console.log('Students:', students);
                 console.log('Groups:', groups);
@@ -321,12 +345,43 @@ define(['jquery'], function($) {
                     });
                 }
 
+                // Initialize Bootstrap dropdown for the group button.
+                const groupDropdownBtn = document.getElementById('random-peers-group-dropdown');
+                if (groupDropdownBtn) {
+                    // Initialize Bootstrap 5 dropdown if available.
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+                        new bootstrap.Dropdown(groupDropdownBtn);
+                    }
+                }
+
                 // Handle random assignment - Group dropdown items.
                 $(document).off('click.peerassign', '.random-peers-group-item');
                 $(document).on('click.peerassign', '.random-peers-group-item', function(e) {
                     e.preventDefault();
-                    const groupId = parseInt($(this).data('groupid'));
-                    assignRandomPeersGroup(groupId);
+                    e.stopPropagation();
+                    const groupIdAttr = $(this).data('groupid');
+                    const groupId = parseInt(groupIdAttr);
+                    console.log('Group dropdown item clicked, groupIdAttr:', groupIdAttr, 'groupId:', groupId, 'groups:', groups);
+                    if (groupId && !isNaN(groupId)) {
+                        assignRandomPeersGroup(groupId);
+                        // Close the dropdown manually.
+                        const dropdown = $(this).closest('.dropdown');
+                        const dropdownBtn = dropdown.find('.dropdown-toggle');
+                        if (typeof bootstrap !== 'undefined' && bootstrap.Dropdown) {
+                            const dropdownInstance = bootstrap.Dropdown.getInstance(dropdownBtn[0]);
+                            if (dropdownInstance) {
+                                dropdownInstance.hide();
+                            }
+                        } else {
+                            // Fallback for Bootstrap 4 or if bootstrap is not available.
+                            dropdown.removeClass('show');
+                            dropdown.find('.dropdown-menu').removeClass('show');
+                            dropdownBtn.attr('aria-expanded', 'false');
+                        }
+                    } else {
+                        console.error('Invalid groupId:', groupId, 'from attr:', groupIdAttr);
+                        alert('Invalid group selected. Please try again.');
+                    }
                 });
 
                 // Listen for changes to Number of Peer Assessors to trim excess peers and update dropdowns.
