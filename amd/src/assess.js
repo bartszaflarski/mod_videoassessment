@@ -48,18 +48,21 @@ define(['jquery'], function ($) {
                 }
             });
 
-            if ($('iframe')) {
-                const iframe = document.createElement('iframe');
-                iframe.addEventListener('load', function () {
-                    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent)) {
-                        var youtubemediaplugin = iframe;
-                        youtubemediaplugin.attr('style', 'width:100% !important;top:0;left:0;position:static');
-                        youtubemediaplugin.attr('allowfullscreen', 'false');
-                        youtubemediaplugin.removeAttr('width');
-                        youtubemediaplugin.removeAttr('height');
-                    }
-                });
-            }
+            // Handle YouTube iframes on mobile devices.
+            $('iframe').each(function() {
+                const iframe = this;
+                if (iframe.addEventListener) {
+                    iframe.addEventListener('load', function () {
+                        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent)) {
+                            const $iframe = $(iframe);
+                            $iframe.attr('style', 'width:100% !important;top:0;left:0;position:static');
+                            $iframe.attr('allowfullscreen', 'false');
+                            $iframe.removeAttr('width');
+                            $iframe.removeAttr('height');
+                        }
+                    });
+                }
+            });
             var rubrics_passed = $('input[name="rubrics_passed"]').val();
 
             if (typeof (rubrics_passed) != 'undefined') {

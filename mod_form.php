@@ -1055,7 +1055,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 'type' => 'button',
                 'class' => 'btn btn-sm btn-outline-secondary dropdown-toggle',
                 'id' => 'random-peers-group-dropdown',
-                'data-toggle' => 'dropdown',
+                'data-bs-toggle' => 'dropdown',
                 'aria-haspopup' => 'true',
                 'aria-expanded' => 'false',
             ]);

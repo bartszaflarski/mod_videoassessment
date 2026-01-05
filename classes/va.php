@@ -278,6 +278,7 @@ class va {
         }
 
         if ($action == 'assess' || $action == 'trainingresult') {
+            $PAGE->set_pagelayout('standard');
             $PAGE->blocks->show_only_fake_blocks();
             $PAGE->requires->css('/mod/videoassessment/assess.css');
             $PAGE->add_body_class('assess-page');
