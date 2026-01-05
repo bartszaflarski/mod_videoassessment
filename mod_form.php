@@ -433,6 +433,11 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                         $this->current->_advancedgradingdata['methods']
                     );
                 $mform->addHelpButton('advancedgradingmethod_' . $firstareaname, 'advancedgradingmethodsgroup', 'videoassessment');
+                
+                // Set default grading method to 'rubric' if it's available.
+                if (isset($this->current->_advancedgradingdata['methods']['rubric'])) {
+                    $mform->setDefault('advancedgradingmethod_' . $firstareaname, 'rubric');
+                }
 
                 // Add hidden fields for other areas that will sync with the main selector.
                 $otherareas = array_keys($this->current->_advancedgradingdata['areas']);
@@ -440,6 +445,10 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 foreach ($otherareas as $areaname) {
                     $mform->addElement('hidden', 'advancedgradingmethod_' . $areaname);
                     $mform->setType('advancedgradingmethod_' . $areaname, PARAM_ALPHANUMEXT);
+                    // Set default to 'rubric' for hidden fields too.
+                    if (isset($this->current->_advancedgradingdata['methods']['rubric'])) {
+                        $mform->setDefault('advancedgradingmethod_' . $areaname, 'rubric');
+                    }
                 }
             }
 
@@ -587,6 +596,13 @@ class mod_videoassessment_mod_form extends moodleform_mod {
 
         // Initialize JavaScript for fairness bonus visibility toggle.
         $PAGE->requires->js_call_amd('mod_videoassessment/mod_form', 'initFairnessBonusChange');
+
+        // =====================================================================
+        // Automatic File Deletion at Course End Date
+        // =====================================================================
+        $mform->addElement('selectyesno', 'autodeletefiles', get_string('autodeletefiles', 'videoassessment'));
+        $mform->setDefault('autodeletefiles', 0);
+        $mform->addHelpButton('autodeletefiles', 'autodeletefiles', 'videoassessment');
 
         // Bulk upload videos and related management links (only for existing activities).
         if ($cm) {

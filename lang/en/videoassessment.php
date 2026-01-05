@@ -149,6 +149,9 @@ $string['ratings_help'] = 'When combining self/peer/class/teacher assessments, a
 $string['assessorsandweightings'] = 'Assessors and weightings';
 $string['videosubmissions'] = 'Video submissions';
 $string['advancedoptions'] = 'Advanced options';
+$string['autodeletefiles'] = 'Automatic file deletion at course end date';
+$string['autodeletefiles_help'] = 'If enabled, all video files associated with this activity will be automatically deleted when the course end date is reached. This helps manage storage space after courses are completed.';
+$string['task_automatic_file_deletion'] = 'Automatic file deletion at course end date';
 $string['ratingself'] = 'Self weighting';
 $string['ratingself_help'] = 'Set the weighting of the self grading within a student’s total grade. Self assessment is often influenced by others” scores, so the teacher’s score is not shown until a student has completed her/his self assessment. The self scores are usually shown in the color ‘red’.';
 $string['ratingteacher'] = 'Teacher weighting';
@@ -356,7 +359,7 @@ The email message format for each type of notification must be set up by the tea
 $string['modgrade'] = 'Grade Type';
 $string['modgrade_help'] = 'For video assessment, do not change the default settings here for “Grade Type”. The Grade Type is “Point” and the maximum grade is “100”.  If you change the settings, the video assessment system may not work.';
 
-$string['advancedgradingmethodsgroup'] = 'Grading Methods';
+$string['advancedgradingmethodsgroup'] = 'Create or Select rubric';
 $string['advancedgradingmethodsgroup_help'] = 'For video assessment, do not change the default settings here for “Grading Method”. All settings use rubric, because that is the best method of performance assessment. If you change the settings, the video assessment system may not work.';
 $string['classgrading'] = 'Whole Class Grading';
 $string['classgrading_help'] = 'If you want the whole class of students to watch a live performance and assess it in real time, use this feature. To turn on whole class grading, click ‘Open Class Grading’.  The default is “Close class grading”.  All the student’s grades will be totaled into one average grade.';

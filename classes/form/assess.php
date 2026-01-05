@@ -245,7 +245,12 @@ class assess extends \moodleform {
             if ($data->gradertype == "teacher" || $data->gradertype == "peer") {
                 $mform->addElement('advcheckbox', "isnotifystudent", "notify student", [], [0, 1]);
             }
-            if (isset($grade->isnotifystudent)) {
+            // Determine default value: check user preference first, then existing grade, then default to 1.
+            global $USER;
+            $defaultnotify = get_user_preferences('videoassessment_notify_student_default', null);
+            if ($defaultnotify !== null) {
+                $mform->setDefault("isnotifystudent", (int)$defaultnotify);
+            } else if (isset($grade->isnotifystudent)) {
                 $mform->setDefault("isnotifystudent", $grade->isnotifystudent);
             } else {
                 $mform->setDefault('isnotifystudent', 1);

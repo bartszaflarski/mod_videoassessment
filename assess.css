@@ -277,6 +277,26 @@
         float: none !important;
         width: 100% !important;
         margin: 0 0 20px 0 !important;
+        height: 25vh;
+    }
+    
+    .path-mod-videoassessment .assess-form-videos .video-wrap,
+    .assess-form-videos .video-wrap {
+        width: 100% !important;
+        height: 100% !important;
+    }
+    
+    .path-mod-videoassessment .assess-form-videos video,
+    .assess-form-videos video,
+    .path-mod-videoassessment .assess-form-videos object,
+    .assess-form-videos object,
+    .path-mod-videoassessment .assess-form-videos iframe,
+    .assess-form-videos iframe,
+    .path-mod-videoassessment .assess-form-videos embed,
+    .assess-form-videos embed,
+    .path-mod-videoassessment .assess-form-videos .mediaplugin,
+    .assess-form-videos .mediaplugin {
+        width: 100% !important;
     }
 
     .path-mod-videoassessment .gradingform,

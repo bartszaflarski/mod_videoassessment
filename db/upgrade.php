@@ -1027,5 +1027,17 @@ function xmldb_videoassessment_upgrade($oldversion = 0) {
         upgrade_mod_savepoint(true, 2025120801, 'videoassessment');
     }
 
+    if ($oldversion < 2025120802) {
+        $table = new xmldb_table('videoassessment');
+
+        // Add autodeletefiles field (default 0 = disabled).
+        $field = new xmldb_field('autodeletefiles', XMLDB_TYPE_INTEGER, 1, null, XMLDB_NOTNULL, null, 0);
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2025120802, 'videoassessment');
+    }
+
     return true;
 }

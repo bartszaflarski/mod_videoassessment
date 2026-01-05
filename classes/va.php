@@ -1593,6 +1593,14 @@ class va {
                 }
             }
             $gradertype = $this->get_grader_type($data->userid, $gradertype);
+            
+            // Determine notify student value and save teacher's preference for subsequent gradings.
+            $notifystudent = empty($data->isnotifystudent) ? 0 : $data->isnotifystudent;
+            global $USER;
+            if ($gradertype == 'teacher') {
+                set_user_preference('videoassessment_notify_student_default', $notifystudent);
+            }
+            
             foreach ($this->timings as $timing) {
                 $gradingarea = $timing . $gradertype;
                 $itemid = $this->get_grade_item($gradingarea, $data->userid);
@@ -1610,11 +1618,7 @@ class va {
                     $grade->gradeitem = $itemid;
                     $grade->id = $DB->insert_record('videoassessment_grades', $grade);
                 }
-                if (empty($data->isnotifystudent)) {
-                    $grade->isnotifystudent = 0;
-                } else {
-                    $grade->isnotifystudent = $data->isnotifystudent;
-                }
+                $grade->isnotifystudent = $notifystudent;
 
                 $grade->grade = $data->{'xgrade' . $timing};
                 if (isset($data->{'submissioncomment' . $timing})) {
