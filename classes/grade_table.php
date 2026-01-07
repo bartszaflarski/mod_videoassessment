@@ -63,6 +63,13 @@ class grade_table {
     public $instance;
 
     /**
+     * Course module object.
+     *
+     * @var \stdClass
+     */
+    public $cm;
+
+    /**
      * Table data array containing rows and columns.
      *
      * @var \stdClass
@@ -535,8 +542,9 @@ class grade_table {
         $this->add_data($header);
 
         if (!isset($user->picture)) {
-            $tmp = $DB->get_record('user', array('id' => $user->userid), \user_picture::fields());
-            foreach (explode(',', \user_picture::fields()) as $field) {
+            $picturefields = \core_user\fields::get_picture_fields();
+            $tmp = $DB->get_record('user', array('id' => $user->userid), implode(',', $picturefields));
+            foreach ($picturefields as $field) {
                 $user->$field = $tmp->$field;
             }
         }
@@ -732,8 +740,9 @@ class grade_table {
             'donotclickhere',
         ), 'mod_videoassessment');
         if (!isset($user->picture)) {
-            $tmp = $DB->get_record('user', array('id' => $user->userid), \user_picture::fields());
-            foreach (explode(',', \user_picture::fields()) as $field) {
+            $picturefields = \core_user\fields::get_picture_fields();
+            $tmp = $DB->get_record('user', array('id' => $user->userid), implode(',', $picturefields));
+            foreach ($picturefields as $field) {
                 $user->$field = $tmp->$field;
             }
         }

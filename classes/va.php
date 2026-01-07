@@ -829,7 +829,8 @@ class va {
 
         $thumbsize = self::get_thumbnail_size();
 
-        $users = $this->get_students(\user_picture::fields('u'), 0);
+        $userfields = \core_user\fields::for_userpic()->get_sql('u', false, '', '', false)->selects;
+        $users = $this->get_students($userfields, 0);
         array_walk($users, function (\stdClass $a) {
             global $OUTPUT;
             $a->fullname = fullname($a);
@@ -1623,8 +1624,39 @@ class va {
 
                 $grade->grade = $data->{'xgrade' . $timing};
                 if (isset($data->{'submissioncomment' . $timing})) {
-                    $grade->submissioncomment = $data->{'submissioncomment' . $timing}['text'];
-                    $grade->submissioncommentformat = $data->{'submissioncomment' . $timing}['format'];
+                    $editorvalue = $data->{'submissioncomment' . $timing};
+                    
+                    // Get maxbytes setting.
+                    global $CFG;
+                    $maxbytes = get_user_max_upload_file_size($this->context, $CFG->maxbytes, $this->course->maxbytes);
+                    
+                    // Editor options for file handling.
+                    $editoroptions = array(
+                        'maxfiles' => EDITOR_UNLIMITED_FILES,
+                        'maxbytes' => $maxbytes,
+                        'noclean' => true,
+                        'context' => $this->context,
+                        'subdirs' => true,
+                    );
+                    
+                    // Prepare object for file_postupdate_standard_editor.
+                    // It expects an object with 'text' property and 'text_editor' property containing the editor data.
+                    $editorobj = new \stdClass();
+                    $editorobj->text = isset($editorvalue['text']) ? $editorvalue['text'] : '';
+                    $editorobj->text_editor = $editorvalue; // The editor data array.
+                    
+                    $editorobj = file_postupdate_standard_editor(
+                        $editorobj,
+                        'text',
+                        $editoroptions,
+                        $this->context,
+                        'mod_videoassessment',
+                        'submissioncomment',
+                        $grade->id
+                    );
+                    
+                    $grade->submissioncomment = $editorobj->text;
+                    $grade->submissioncommentformat = isset($editorobj->textformat) ? $editorobj->textformat : FORMAT_HTML;
                 }
                 $grade->timemarked = time();
                 $DB->update_record('videoassessment_grades', $grade);

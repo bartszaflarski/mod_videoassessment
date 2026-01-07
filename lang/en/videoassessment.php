@@ -414,6 +414,7 @@ $string['generalcomments'] = 'General Comments';
 $string['notificationmessagesent'] = 'Notification Message sent';
 
 $string['bonuspercentage'] = 'Bonus Percentage';
+$string['bonuspercentage_help'] = 'The percentage of the final grade that will be allocated as a fairness bonus. This bonus is added on top of the total score. For example, if set to 10%, students can earn up to 10% additional points based on how fairly they score compared to the teacher\'s assessment.';
 $string['ontopoftotal'] = 'On top of total';
 $string['within'] = 'within';
 $string['ofteacherscore'] = 'of teacher score = ';

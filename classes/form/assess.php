@@ -224,23 +224,64 @@ class assess extends \moodleform {
                     \html_writer::tag('span', $gradestr, array('class' => 'mark')));
             $mform->setType('finalgrade'.$timing, PARAM_INT);
 
-            $mform->addElement('editor', 'submissioncomment' . $timing, get_string('feedback', 'videoassessment') . ':',
-                    array('cols' => 50, 'rows' => 8),
-                    array(
-                        'maxfiles' => EDITOR_UNLIMITED_FILES,
-                        'noclean' => true,
-                        'context' => $coursecontext, 'subdirs' => true,
-                    ),
-                );
+            // Get course maxbytes setting for file uploads using Moodle's standard function.
+            global $COURSE, $CFG, $PAGE;
+            $maxbytes = get_user_max_upload_file_size($PAGE->context, $CFG->maxbytes, $COURSE->maxbytes);
 
-            if (isset($grade->submissioncomment)) {
-                $mform->setDefault(
-                    'submissioncomment'. $timing,
-                    array(
-                        'text' => $grade->submissioncomment,
-                        'format' => FORMAT_HTML,
-                    ),
+            // Editor options with file upload support.
+            $editoroptions = array(
+                'maxfiles' => EDITOR_UNLIMITED_FILES,
+                'maxbytes' => $maxbytes,
+                'noclean' => true,
+                'context' => $coursecontext,
+                'subdirs' => true,
+            );
+            
+            $fieldname = 'submissioncomment' . $timing;
+            
+            // Prepare editor data with file support if grade exists.
+            if (isset($grade->submissioncomment) && isset($grade->id)) {
+                $editorvalue = new \stdClass();
+                $editorvalue->text = $grade->submissioncomment;
+                $editorvalue->textformat = isset($grade->submissioncommentformat) && $grade->submissioncommentformat > 0 
+                    ? $grade->submissioncommentformat 
+                    : FORMAT_HTML;
+                
+                // Prepare editor with file area support.
+                // file_prepare_standard_editor uses 'text' as the field name, so it creates 'text_editor' property.
+                $editorvalue = file_prepare_standard_editor(
+                    $editorvalue,
+                    'text',
+                    $editoroptions,
+                    $coursecontext,
+                    'mod_videoassessment',
+                    'submissioncomment',
+                    $grade->id
                 );
+                
+                $mform->addElement('editor', $fieldname, get_string('feedback', 'videoassessment') . ':',
+                        array('cols' => 50, 'rows' => 8),
+                        $editoroptions
+                    );
+                $mform->setType($fieldname, PARAM_RAW);
+                // file_prepare_standard_editor creates 'text_editor' property, not fieldname_editor.
+                $mform->setDefault($fieldname, $editorvalue->text_editor);
+            } else {
+                // New feedback - no file area needed yet.
+                $mform->addElement('editor', $fieldname, get_string('feedback', 'videoassessment') . ':',
+                        array('cols' => 50, 'rows' => 8),
+                        $editoroptions
+                    );
+                $mform->setType($fieldname, PARAM_RAW);
+                if (isset($grade->submissioncomment)) {
+                    $mform->setDefault(
+                        $fieldname,
+                        array(
+                            'text' => $grade->submissioncomment,
+                            'format' => FORMAT_HTML,
+                        ),
+                    );
+                }
             }
             if ($data->gradertype == "teacher" || $data->gradertype == "peer") {
                 $mform->addElement('advcheckbox', "isnotifystudent", "notify student", [], [0, 1]);

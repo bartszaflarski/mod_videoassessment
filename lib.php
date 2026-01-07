@@ -46,7 +46,7 @@ define('VIDEOASSESS_EVENT_TYPE_GRADINGDUE', 'gradingdue');
  */
 function videoassessment_add_instance($va, $form) {
     global $DB;
-    if ($va->isquickSetup == 1) {
+    if (isset($va->isquickSetup) && $va->isquickSetup == 1) {
         if ($va->isselfassesstype == 1 || $va->ispeerassesstype == 1 || $va->isteacherassesstype == 1 || $va->isclassassesstype == 1) {
             if ($va->isselfassesstype == 1) {
                 $va->ratingself = $va->selfassess;
@@ -124,7 +124,7 @@ function videoassessment_update_instance($va, $form) {
 
     $va->id = $va->instance;
     $cm = get_coursemodule_from_instance('videoassessment', $va->id, 0, false, MUST_EXIST);
-    if ($va->isquickSetup == 1) {
+    if (isset($va->isquickSetup) && $va->isquickSetup == 1) {
         if ($va->isselfassesstype == 1 || $va->ispeerassesstype == 1 || $va->isteacherassesstype == 1 || $va->isclassassesstype == 1) {
             if ($va->isselfassesstype == 1) {
                 $va->ratingself = $va->selfassess;
@@ -643,23 +643,32 @@ function videoassessment_extend_settings_navigation($settings, navigation_node $
     $hasgrade = videoassessment_check_has_grade($PAGE->cm->instance);
     $areas = videoassessment_get_areas($PAGE->cm->context->id);
 
-    echo "<div class='check-has-grade hidden " . ($areaname ? $areaname : '') . "'>";
-    echo '<input name="videoassessmentid" text="' . $PAGE->cm->instance . '">';
+    // Build the HTML but don't echo it directly (which would break DOCTYPE).
+    // Instead, add it to the page footer via JavaScript to ensure it's after DOCTYPE.
+    $checkgradehtml = "<div class='check-has-grade hidden " . ($areaname ? $areaname : '') . "'>";
+    $checkgradehtml .= '<input name="videoassessmentid" text="' . $PAGE->cm->instance . '">';
     if ($hasgrade) {
         foreach ($hasgrade as $key => $grade) {
             if ($areas) {
                 foreach ($areas as $k => $area) {
                     if ($area == $key) {
-                        echo "<input name='$key' value='$grade' text='$k'>";
+                        $checkgradehtml .= "<input name='" . s($key) . "' value='" . s($grade) . "' text='" . s($k) . "'>";
                     }
                 }
             } else {
-                echo "<input name='$key' value='$grade'>";
+                $checkgradehtml .= "<input name='" . s($key) . "' value='" . s($grade) . "'>";
             }
         }
     }
-
-    echo "</div>";
+    $checkgradehtml .= "</div>";
+    
+    // Add to page footer via JavaScript to ensure it's output after DOCTYPE.
+    $PAGE->requires->js_amd_inline("
+        require(['jquery'], function(\$) {
+            \$('body').append(" . json_encode($checkgradehtml) . ");
+        });
+    ");
+    
     $PAGE->requires->jquery();
     $PAGE->requires->js_call_amd('mod_videoassessment/grademanage', 'init_grademanage', array());
 
