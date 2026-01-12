@@ -165,20 +165,25 @@ function videoassessment_update_instance($va, $form) {
             $va->gradepass = 0;
         }
 
-        if ($va->advancedgradingmethod_beforeteacher == 'rubric') {
-            $va->advancedgradingmethod_beforeteacher = '';
-        }
-        if ($va->advancedgradingmethod_beforetraining == 'rubric') {
-            $va->advancedgradingmethod_beforetraining = '';
-        }
-        if ($va->advancedgradingmethod_beforepeer == 'rubric') {
-            $va->advancedgradingmethod_beforepeer = '';
-        }
-        if ($va->advancedgradingmethod_beforeclass == 'rubric') {
-            $va->advancedgradingmethod_beforeclass = '';
-        }
-        if ($va->advancedgradingmethod_beforeself == 'rubric') {
-            $va->advancedgradingmethod_beforeself = '';
+        // Note: advancedgradingmethod_* fields are processed by Moodle core's edit_module_post_actions()
+        // which calls set_active_method() on the grading manager. We should not clear these fields.
+        // If a rubric definition exists but method is not set, ensure it's set to 'rubric'.
+        require_once($CFG->dirroot . '/grade/grading/lib.php');
+        $gradingman = get_grading_manager($cm->context, 'mod_videoassessment');
+        $areas = $gradingman->get_available_areas();
+        
+        foreach ($areas as $areaname => $areatitle) {
+            $formfield = 'advancedgradingmethod_' . $areaname;
+            $gradingman->set_area($areaname);
+            
+            // If method is not set but a rubric definition exists, set it to 'rubric'.
+            if (empty($va->$formfield)) {
+                $controller = $gradingman->get_controller('rubric');
+                if ($controller && $controller->is_form_defined()) {
+                    // Rubric definition exists but method not set - set it to 'rubric'.
+                    $va->$formfield = 'rubric';
+                }
+            }
         }
     } else {
         if ($va->ratingself > 0) {
@@ -671,6 +676,10 @@ function videoassessment_extend_settings_navigation($settings, navigation_node $
     
     $PAGE->requires->jquery();
     $PAGE->requires->js_call_amd('mod_videoassessment/grademanage', 'init_grademanage', array());
+    
+    // Always check if we're on the grading management page and change heading if needed.
+    // This works even if this function is called from other contexts.
+    $PAGE->requires->js_call_amd('mod_videoassessment/grading_heading', 'init');
 
 }
 
@@ -716,6 +725,21 @@ function videoassessment_cm_info_view(cm_info $cm) {
         $checkUrl = $CFG->wwwroot . '/mod/videoassessment/check_grading_redirect.php';
         $inlineJs = "
             (function() {
+                // Don't redirect if we're on the grading management page or activity page.
+                var currentUrl = window.location.href;
+                if (currentUrl.indexOf('/grade/grading/manage.php') !== -1 ||
+                    currentUrl.indexOf('/mod/videoassessment/view.php') !== -1 ||
+                    currentUrl.indexOf('/course/view.php') === -1) {
+                    // Clear redirect flag when NOT on course page to prevent unwanted redirects.
+                    sessionStorage.removeItem('videoassessment_check_grading_redirect');
+                    return;
+                }
+                
+                // Only proceed if we're on the course page.
+                if (currentUrl.indexOf('/course/view.php') === -1) {
+                    return;
+                }
+                
                 var redirectData = sessionStorage.getItem('videoassessment_check_grading_redirect');
                 
                 // Only proceed if we have the sessionStorage flag.
@@ -736,18 +760,18 @@ function videoassessment_cm_info_view(cm_info $cm) {
                     return;
                 }
                 
-                // Remove the redirect flag immediately.
+                // Remove the redirect flag immediately to prevent re-triggering.
                 sessionStorage.removeItem('videoassessment_check_grading_redirect');
                 
                 var now = Date.now();
                 
-                // Only proceed if the redirect was set less than 10 seconds ago.
-                if (now - storedTime > 10000) {
-                    console.log('Grading redirect expired');
+                // Only proceed if the redirect was set less than 2 seconds ago.
+                // Very short time window to prevent redirects when navigating away.
+                if (now - storedTime > 2000) {
                     return;
                 }
                 
-                // Mark this token as processed.
+                // Mark this token as processed immediately.
                 processedTokens.push(token);
                 // Keep only last 10 tokens to prevent storage bloat.
                 if (processedTokens.length > 10) {
@@ -755,24 +779,23 @@ function videoassessment_cm_info_view(cm_info $cm) {
                 }
                 sessionStorage.setItem('videoassessment_processed_tokens', JSON.stringify(processedTokens));
                 
-                console.log('Checking grading redirect...');
+                // Check for redirect via AJAX.
                 fetch('{$checkUrl}', {credentials: 'same-origin'})
                     .then(function(response) { return response.json(); })
                     .then(function(data) {
-                        console.log('Redirect check response:', data);
                         if (data.redirect && data.url) {
-                            console.log('Redirecting to:', data.url);
                             window.location.replace(data.url);
                         }
                     })
                     .catch(function(error) {
-                        console.error('Redirect check error:', error);
+                        // Silently fail - don't show errors
                     });
             })();
         ";
         $PAGE->requires->js_init_code($inlineJs, false);
     }
 }
+
 
 /**
  * Get association (userid, timing) from a stored video file.

@@ -380,8 +380,6 @@ define(['jquery'], function ($) {
             e.preventDefault();
             e.stopPropagation();
             
-            console.log('Rubric button clicked');
-            
             // Set the redirect flag in the form.
             let field = $('input[name="redirect_to_rubric"]');
             if (field.length) {
@@ -394,23 +392,39 @@ define(['jquery'], function ($) {
             // Store the intent in sessionStorage with a timestamp and unique token.
             // The token ensures this specific redirect is only processed once.
             var token = Math.random().toString(36).substring(2, 15);
-            sessionStorage.setItem('videoassessment_check_grading_redirect', Date.now().toString() + ':' + token);
+            var timestamp = Date.now();
+            sessionStorage.setItem('videoassessment_check_grading_redirect', timestamp.toString() + ':' + token);
+            
+            // Mark this token as processed immediately to prevent re-processing.
+            var processedTokens = JSON.parse(sessionStorage.getItem('videoassessment_processed_tokens') || '[]');
+            processedTokens.push(token);
+            sessionStorage.setItem('videoassessment_processed_tokens', JSON.stringify(processedTokens));
             
             // Find the form.
             const form = $('form.mform');
             if (!form.length) {
-                console.error('Form not found');
                 return;
             }
+            
+            // Mark the form as submitted BEFORE submitting to prevent beforeunload warning.
+            // Moodle's change checker checks for dataset.formSubmitted === "true" to determine
+            // if a form has been submitted and should not trigger the warning.
+            form[0].dataset.formSubmitted = "true";
+            form[0].dataset.ignoreSubmission = "true";
+            
+            // Also try to mark using Moodle's change checker API if available.
+            require(['core_form/changechecker'], function(changeChecker) {
+                if (typeof changeChecker.markFormSubmitted === 'function') {
+                    changeChecker.markFormSubmitted(form[0]);
+                }
+            });
             
             // Add submitbutton for "Save and return to course" behavior.
             // We'll handle the redirect via AJAX after the page loads.
             form.find('input[name="submitbutton"][type="hidden"]').remove();
             form.append('<input type="hidden" name="submitbutton" value="1">');
             
-            console.log('Submitting form with redirect_to_rubric flag');
-            
-            // Submit the form normally.
+            // Submit the form. The formSubmitted flag should prevent the beforeunload warning.
             form[0].submit();
         });
     }

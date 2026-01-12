@@ -296,7 +296,12 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'button',
             'submitbutton_rubric_btn',
             get_string('saveandcreaterubric', 'videoassessment'),
-            ['id' => 'id_submitbutton_rubric', 'type' => 'button']
+            [
+                'id' => 'id_submitbutton_rubric', 
+                'type' => 'button',
+                'data-formchangechecker-ignore-submit' => '1'
+            ],
+            ['customclassoverride' => 'btn btn-primary']
         );
         $buttonarray[] = $mform->createElement('cancel');
         $mform->addGroup($buttonarray, 'buttonar', '', [' '], false);
@@ -489,44 +494,44 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         // Training Pre-test
         // =====================================================================
         $mform->addElement('selectyesno', 'training', get_string('trainingpretest', 'videoassessment'));
-        $mform->setDefault('training', 0);
-        $mform->addHelpButton('training', 'trainingpretest', 'videoassessment');
+            $mform->setDefault('training', 0);
+            $mform->addHelpButton('training', 'trainingpretest', 'videoassessment');
 
         // Training Video (shown when training = yes).
-        $mform->addElement(
-            'filemanager',
-            'trainingvideo',
-            get_string('trainingvideo', 'videoassessment'),
-            null,
-            [
-                'subdirs' => 0,
-                'maxbytes' => $COURSE->maxbytes,
-                'maxfiles' => 1,
-                'accepted_types' => ['video', 'audio'],
-            ],
-        );
-        $mform->addElement('hidden', 'trainingvideoid');
-        $mform->setType('trainingvideoid', PARAM_INT);
-        $mform->addHelpButton('trainingvideo', 'trainingvideo', 'videoassessment');
+            $mform->addElement(
+                'filemanager',
+                'trainingvideo',
+                get_string('trainingvideo', 'videoassessment'),
+                null,
+                [
+                    'subdirs' => 0,
+                    'maxbytes' => $COURSE->maxbytes,
+                    'maxfiles' => 1,
+                    'accepted_types' => ['video', 'audio'],
+                ],
+            );
+            $mform->addElement('hidden', 'trainingvideoid');
+            $mform->setType('trainingvideoid', PARAM_INT);
+            $mform->addHelpButton('trainingvideo', 'trainingvideo', 'videoassessment');
 
         // Training Explanation (shown when training = yes).
-        $mform->addElement(
-            'textarea',
-            'trainingdesc',
-            get_string('trainingdesc', 'videoassessment'),
-            ['cols' => 50, 'rows' => 8]
-        );
-        $mform->setDefault('trainingdesc', get_string('trainingdesctext', 'videoassessment'));
-        $mform->addHelpButton('trainingdesc', 'trainingdesc', 'videoassessment');
+            $mform->addElement(
+                'textarea',
+                'trainingdesc',
+                get_string('trainingdesc', 'videoassessment'),
+                ['cols' => 50, 'rows' => 8]
+            );
+            $mform->setDefault('trainingdesc', get_string('trainingdesctext', 'videoassessment'));
+            $mform->addHelpButton('trainingdesc', 'trainingdesc', 'videoassessment');
 
         // Accepted difference in scores (shown when training = yes).
         $diffpercentopts = [];
-        for ($i = 100; $i >= 0; $i--) {
+            for ($i = 100; $i >= 0; $i--) {
             $diffpercentopts[$i] = $i . '%';
-        }
+            }
         $mform->addElement('select', 'accepteddifference', get_string('accepteddifference', 'videoassessment'), $diffpercentopts);
-        $mform->setDefault('accepteddifference', 20);
-        $mform->addHelpButton('accepteddifference', 'accepteddifference', 'videoassessment');
+            $mform->setDefault('accepteddifference', 20);
+            $mform->addHelpButton('accepteddifference', 'accepteddifference', 'videoassessment');
 
         // Initialize JavaScript for training pretest visibility toggle.
         $PAGE->requires->js_call_amd('mod_videoassessment/mod_form', 'initTrainingChange');
@@ -1007,13 +1012,11 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $groups = groups_get_all_groups($COURSE->id);
         $groupdata = [];
         foreach ($groups as $group) {
-            // Get student members of each group (only those with student role).
+            // Get all members of each group (no role filtering for groups).
             $groupmembers = [];
             $members = groups_get_members($group->id, 'u.id');
             foreach ($members as $member) {
-                if (isset($studentdata[$member->id])) {
-                    $groupmembers[] = $member->id;
-                }
+                $groupmembers[] = $member->id;
             }
             if (!empty($groupmembers)) {
                 $groupdata[$group->id] = [
@@ -1248,5 +1251,70 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         }
 
         return $data;
+    }
+
+    /**
+     * Set defaults after form data is loaded.
+     * This ensures that new instances default to 'rubric' grading method,
+     * and that if a rubric definition exists (e.g., after template selection),
+     * the method is set to 'rubric'.
+     */
+    public function definition_after_data() {
+        parent::definition_after_data();
+
+        $mform = $this->_form;
+
+        // Set default to 'rubric' for new instances or when rubric definition exists.
+        if (!empty($this->current->_advancedgradingdata['areas'])) {
+            $areas = array_keys($this->current->_advancedgradingdata['areas']);
+            
+            foreach ($areas as $areaname) {
+                $fieldname = 'advancedgradingmethod_' . $areaname;
+                
+                // Only set default if field exists.
+                if ($mform->elementExists($fieldname)) {
+                    $currentvalue = $mform->getElementValue($fieldname);
+                    $isempty = empty($currentvalue) || (is_array($currentvalue) && empty($currentvalue[0]));
+                    
+                    // Check if a rubric definition exists for this area.
+                    $hasrubricdefinition = false;
+                    global $CFG;
+                    if (!empty($this->current->_advancedgradingdata['areas'][$areaname]['method'])) {
+                        // Method is already set, check if it's rubric.
+                        $hasrubricdefinition = ($this->current->_advancedgradingdata['areas'][$areaname]['method'] === 'rubric');
+                    } else {
+                        // Check if rubric definition exists by checking the grading manager.
+                        try {
+                            require_once($CFG->dirroot . '/grade/grading/lib.php');
+                            if (!empty($this->context)) {
+                                $gradingmanager = get_grading_manager($this->context, 'mod_videoassessment', $areaname);
+                                $method = $gradingmanager->get_active_method();
+                                if (empty($method)) {
+                                    // No active method, but check if rubric definition exists.
+                                    $gradingmanager->set_area($areaname);
+                                    $controller = $gradingmanager->get_controller('rubric');
+                                    if ($controller && $controller->is_form_defined()) {
+                                        $hasrubricdefinition = true;
+                                        // Set the method to 'rubric' since a definition exists.
+                                        $gradingmanager->set_active_method('rubric');
+                                    }
+                                } else if ($method === 'rubric') {
+                                    $hasrubricdefinition = true;
+                                }
+                            }
+                        } catch (Exception $e) {
+                            // Ignore errors, just continue.
+                        }
+                    }
+                    
+                    // Set to 'rubric' if empty and rubric is available, or if rubric definition exists.
+                    if (isset($this->current->_advancedgradingdata['methods']['rubric'])) {
+                        if ($isempty || $hasrubricdefinition) {
+                            $mform->setDefault($fieldname, 'rubric');
+                        }
+                    }
+                }
+            }
+        }
     }
 }
