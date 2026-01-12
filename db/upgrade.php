@@ -1039,23 +1039,6 @@ function xmldb_videoassessment_upgrade($oldversion = 0) {
         upgrade_mod_savepoint(true, 2025120802, 'videoassessment');
     }
 
-    // Create default rubric template if it doesn't exist (runs after all plugins are installed).
-    if ($oldversion < 2025120805) {
-        global $CFG;
-        require_once($CFG->dirroot . '/grade/grading/lib.php');
-        require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
-        
-        // Only create template if grading tables exist.
-        if ($dbman->table_exists('gradingform_rubric_criteria')) {
-            // Include install.php to get the function.
-            require_once($CFG->dirroot . '/mod/videoassessment/db/install.php');
-            if (function_exists('create_default_rubric_template')) {
-                create_default_rubric_template();
-            }
-        }
-        
-        upgrade_mod_savepoint(true, 2025120805, 'videoassessment');
-    }
 
     return true;
 }

@@ -30,42 +30,9 @@ defined('MOODLE_INTERNAL') || die();
 /**
  * Uninstall cleanup function for video assessment module.
  *
- * Removes the default rubric template that was created during installation.
- *
  * @return void
  */
 function xmldb_videoassessment_uninstall() {
-    global $DB, $CFG;
-    
-    // Clean up the default rubric template if it exists.
-    require_once($CFG->dirroot . '/grade/grading/lib.php');
-    require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
-    
-    $systemcontext = context_system::instance();
-    
-    // Find and delete the default template areas.
-    $templateareas = $DB->get_records_sql(
-        "SELECT ga.id 
-         FROM {grading_areas} ga
-         JOIN {grading_definitions} gd ON gd.areaid = ga.id
-         WHERE ga.contextid = ? 
-         AND ga.component = 'core_grading'
-         AND ga.areaname LIKE 'rubric_videoassessment_default%'
-         AND gd.method = 'rubric'",
-        [$systemcontext->id]
-    );
-    
-    foreach ($templateareas as $area) {
-        try {
-            $manager = get_grading_manager($area->id);
-            $controller = $manager->get_controller('rubric');
-            if ($controller && $controller->is_form_defined()) {
-                $controller->delete_definition();
-            }
-        } catch (Exception $e) {
-            // Log error but continue cleanup
-            debugging('Failed to delete rubric template during uninstall: ' . $e->getMessage(), DEBUG_NORMAL);
-        }
-    }
+    // No cleanup needed - default rubric template creation has been removed.
 }
 
