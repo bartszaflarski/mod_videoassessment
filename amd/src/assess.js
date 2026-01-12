@@ -20,7 +20,7 @@
  * @copyright  2024 Don Hinkleman (hinkelman@mac.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-define(['jquery'], function ($) {
+define(['jquery', 'core/str'], function ($, str) {
     return {
         videoassessmentAssess: function () {
             if ($("#fitem_id_advancedgradingbefore").find(".col-md-9").length > 0) {
@@ -78,6 +78,18 @@ define(['jquery'], function ($) {
                     rubric.hide();
                 }
             }
+
+            // Add "comment" label above textarea in remark cells.
+            str.get_string('comment', 'mod_videoassessment').then(function(labeltext) {
+                $('.gradingform_rubric td.remark, .gradingform_rubric .criterion .remark').each(function() {
+                    var $remark = $(this);
+                    var $textarea = $remark.find('textarea');
+                    if ($textarea.length > 0 && !$remark.find('.remark-comment-label').length) {
+                        var $label = $('<span class="remark-comment-label">' + labeltext + '</span>');
+                        $textarea.before($label);
+                    }
+                });
+            });
         }
     };
 });

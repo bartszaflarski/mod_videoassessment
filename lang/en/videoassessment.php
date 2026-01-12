@@ -159,6 +159,7 @@ $string['ratingteacher_help'] = 'Set the weighting of the teacher’s grading of
 $string['reallydeletevideo'] = 'Are you sure you want to delete this video?';
 $string['reallyresetallpeers'] = 'This will reset peer assignments and re-assign randomly. Continue?';
 $string['remark'] = 'Remark';
+$string['comment'] = 'Comment';
 $string['report'] = 'Report';
 $string['retakevideo'] = 'Retake a video';
 $string['reuploadvideo'] = 'Re-upload a video';

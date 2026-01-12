@@ -202,6 +202,7 @@ class va {
             'class',
             'reallyresetallpeers',
             'reallydeletevideo',
+            'comment',
         ), 'videoassessment');
 
         $PAGE->requires->strings_for_js(array('all'), 'moodle');
