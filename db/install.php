@@ -58,10 +58,14 @@ function xmldb_videoassessment_install() {
         echo $OUTPUT->notification($ffmpegversioninfo, 'notifysuccess');
     }
     
-    // Create default rubric template
-    require_once($CFG->dirroot . '/grade/grading/lib.php');
-    require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
-    create_default_rubric_template();
+    // Create default rubric template (only if grading tables exist)
+    // Note: We check if tables exist because during initial installation,
+    // the rubric plugin tables may not be created yet.
+    if ($DB->get_manager()->table_exists('gradingform_rubric_criteria')) {
+        require_once($CFG->dirroot . '/grade/grading/lib.php');
+        require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
+        create_default_rubric_template();
+    }
 }
 
 /**
@@ -114,46 +118,208 @@ function create_default_rubric_template() {
     $controller = $targetmanager->get_controller('rubric');
     
     // Create default rubric definition structure
+    // The structure must match what the rubric edit form expects
     $definition = new stdClass();
     $definition->name = get_string('defaultrubrictemplate', 'mod_videoassessment');
+    
+    // Description editor format - use draft itemid for new content
+    $draftitemid = file_get_unused_draft_itemid();
     $definition->description_editor = array(
         'text' => get_string('defaultrubrictemplatedesc', 'mod_videoassessment'),
         'format' => FORMAT_HTML,
-        'itemid' => file_get_unused_draft_itemid()
+        'itemid' => $draftitemid
     );
-    $definition->status = gradingform_controller::DEFINITION_STATUS_READY;
     
-    // Default criteria - you can customize these
+    // Status must be READY for templates to be visible
+    $definition->status = gradingform_controller::DEFINITION_STATUS_READY;
+    $definition->saverubric = 'Save rubric and make it ready';
+    
+    // Default criteria - structure matches rubric edit form
+    // 5 criteria: Voice, Gestures, Content, Visuals, Overall
+    // Each with 6 levels: 0-5 points
     $definition->rubric = array(
         'criteria' => array(
-            array(
+            'NEWID1' => array(  // Voice
                 'sortorder' => 1,
-                'description' => get_string('defaultcriterion1', 'mod_videoassessment'),
+                'description' => get_string('defaultcriterionvoice', 'mod_videoassessment'),
                 'descriptionformat' => FORMAT_HTML,
                 'levels' => array(
-                    array(
+                    'NEWID1-1' => array(
                         'score' => 0,
-                        'definition' => get_string('defaultlevel1', 'mod_videoassessment'),
+                        'definition' => get_string('defaultvoice0', 'mod_videoassessment'),
                         'definitionformat' => FORMAT_HTML
                     ),
-                    array(
-                        'score' => 25,
-                        'definition' => get_string('defaultlevel2', 'mod_videoassessment'),
+                    'NEWID1-2' => array(
+                        'score' => 1,
+                        'definition' => '-',
                         'definitionformat' => FORMAT_HTML
                     ),
-                    array(
-                        'score' => 50,
-                        'definition' => get_string('defaultlevel3', 'mod_videoassessment'),
+                    'NEWID1-3' => array(
+                        'score' => 2,
+                        'definition' => '-',
                         'definitionformat' => FORMAT_HTML
                     ),
-                    array(
-                        'score' => 75,
-                        'definition' => get_string('defaultlevel4', 'mod_videoassessment'),
+                    'NEWID1-4' => array(
+                        'score' => 3,
+                        'definition' => get_string('defaultvoice3', 'mod_videoassessment'),
                         'definitionformat' => FORMAT_HTML
                     ),
-                    array(
-                        'score' => 100,
-                        'definition' => get_string('defaultlevel5', 'mod_videoassessment'),
+                    'NEWID1-5' => array(
+                        'score' => 4,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID1-6' => array(
+                        'score' => 5,
+                        'definition' => get_string('defaultvoice5', 'mod_videoassessment'),
+                        'definitionformat' => FORMAT_HTML
+                    )
+                )
+            ),
+            'NEWID2' => array(  // Gestures
+                'sortorder' => 2,
+                'description' => get_string('defaultcriteriongestures', 'mod_videoassessment'),
+                'descriptionformat' => FORMAT_HTML,
+                'levels' => array(
+                    'NEWID2-1' => array(
+                        'score' => 0,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID2-2' => array(
+                        'score' => 1,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID2-3' => array(
+                        'score' => 2,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID2-4' => array(
+                        'score' => 3,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID2-5' => array(
+                        'score' => 4,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID2-6' => array(
+                        'score' => 5,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    )
+                )
+            ),
+            'NEWID3' => array(  // Content
+                'sortorder' => 3,
+                'description' => get_string('defaultcriterioncontent', 'mod_videoassessment'),
+                'descriptionformat' => FORMAT_HTML,
+                'levels' => array(
+                    'NEWID3-1' => array(
+                        'score' => 0,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID3-2' => array(
+                        'score' => 1,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID3-3' => array(
+                        'score' => 2,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID3-4' => array(
+                        'score' => 3,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID3-5' => array(
+                        'score' => 4,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID3-6' => array(
+                        'score' => 5,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    )
+                )
+            ),
+            'NEWID4' => array(  // Visuals
+                'sortorder' => 4,
+                'description' => get_string('defaultcriterionvisuals', 'mod_videoassessment'),
+                'descriptionformat' => FORMAT_HTML,
+                'levels' => array(
+                    'NEWID4-1' => array(
+                        'score' => 0,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID4-2' => array(
+                        'score' => 1,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID4-3' => array(
+                        'score' => 2,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID4-4' => array(
+                        'score' => 3,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID4-5' => array(
+                        'score' => 4,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID4-6' => array(
+                        'score' => 5,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    )
+                )
+            ),
+            'NEWID5' => array(  // Overall
+                'sortorder' => 5,
+                'description' => get_string('defaultcriterionoverall', 'mod_videoassessment'),
+                'descriptionformat' => FORMAT_HTML,
+                'levels' => array(
+                    'NEWID5-1' => array(
+                        'score' => 0,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID5-2' => array(
+                        'score' => 1,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID5-3' => array(
+                        'score' => 2,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID5-4' => array(
+                        'score' => 3,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID5-5' => array(
+                        'score' => 4,
+                        'definition' => '-',
+                        'definitionformat' => FORMAT_HTML
+                    ),
+                    'NEWID5-6' => array(
+                        'score' => 5,
+                        'definition' => '-',
                         'definitionformat' => FORMAT_HTML
                     )
                 )
@@ -171,6 +337,18 @@ function create_default_rubric_template() {
         )
     );
     
-    // Update the definition
-    $controller->update_definition($definition);
+    // Update the definition - this will create the rubric
+    // Use update_or_check_rubric which is the proper method for rubric controller
+    try {
+        $controller->update_or_check_rubric($definition, $USER->id, true);
+    } catch (Exception $e) {
+        // Log error but don't fail installation
+        debugging('Failed to create default rubric template: ' . $e->getMessage(), DEBUG_NORMAL);
+        // Try alternative method
+        try {
+            $controller->update_definition($definition);
+        } catch (Exception $e2) {
+            debugging('Alternative method also failed: ' . $e2->getMessage(), DEBUG_NORMAL);
+        }
+    }
 }
