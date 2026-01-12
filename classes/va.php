@@ -1550,14 +1550,34 @@ class va {
         if ($this->get_associated_video($user->id, 'after')) {
             $gradingareas[] = 'after' . $gradertype;
         }
+        
+        // Auto-duplicate rubric if teacher has one but this grader type doesn't.
+        // This ensures peers can always see the rubric.
+        videoassessment_auto_duplicate_rubric($this->context->id);
+        
         $rubric = new rubric($this, $gradingareas);
 
         foreach ($this->timings as $timing) {
             $gradingarea = $timing . $gradertype;
             $itemid = null;
             $itemid = $this->get_grade_item($gradingarea, $user->id);
-            if ($controller = $rubric->get_available_controller($gradingarea)) {
-
+            
+            // Try to get the controller - this will auto-duplicate if needed.
+            $controller = $rubric->get_available_controller($gradingarea);
+            
+            // If controller still not available, try one more time after ensuring duplication.
+            if (!$controller) {
+                // Force duplication check again.
+                videoassessment_auto_duplicate_rubric($this->context->id);
+                
+                // Reload the rubric object to pick up newly duplicated rubrics.
+                $rubric = new rubric($this, $gradingareas);
+                
+                // Try again to get the controller.
+                $controller = $rubric->get_available_controller($gradingarea);
+            }
+            
+            if ($controller) {
                 $instanceid = optional_param('advancedgradinginstanceid', 0, PARAM_INT);
                 if (!isset($mformdata->advancedgradinginstance)) {
                     $mformdata->advancedgradinginstance = new \stdClass();
@@ -1567,6 +1587,54 @@ class va {
                     $USER->id,
                     $itemid
                 );
+            } else {
+                // Controller not available - check if we should have one.
+                // If a rubric definition exists but controller wasn't found, there's a configuration issue.
+                $manager = get_grading_manager($this->context, 'mod_videoassessment', $gradingarea);
+                $hasdefinition = false;
+                try {
+                    $testcontroller = $manager->get_controller('rubric');
+                    if ($testcontroller && $testcontroller->is_form_defined()) {
+                        $hasdefinition = true;
+                        // Definition exists but wasn't available - try to set active method and reload.
+                        if (!$manager->get_active_method()) {
+                            $manager->set_active_method('rubric');
+                            // Reload rubric object to pick up the change.
+                            $rubric = new rubric($this, $gradingareas);
+                            $controller = $rubric->get_available_controller($gradingarea);
+                            if ($controller) {
+                                $instanceid = optional_param('advancedgradinginstanceid', 0, PARAM_INT);
+                                if (!isset($mformdata->advancedgradinginstance)) {
+                                    $mformdata->advancedgradinginstance = new \stdClass();
+                                }
+                                $mformdata->advancedgradinginstance->$timing = $controller->get_or_create_instance(
+                                    $instanceid,
+                                    $USER->id,
+                                    $itemid
+                                );
+                            }
+                        }
+                    }
+                } catch (Exception $e) {
+                    // No rubric available.
+                }
+                
+                if (!$hasdefinition) {
+                    // Debug: Log why controller is not available with more details.
+                    $manager = get_grading_manager($this->context, 'mod_videoassessment', $gradingarea);
+                    $activemethod = $manager->get_active_method();
+                    $hasdefinitiondetail = false;
+                    try {
+                        $testcontroller = $manager->get_controller('rubric');
+                        if ($testcontroller) {
+                            $hasdefinitiondetail = $testcontroller->is_form_defined();
+                            $isavailable = $testcontroller->is_form_available();
+                            debugging("Rubric controller not available for grading area: {$gradingarea}, gradertype: {$gradertype}. Active method: " . ($activemethod ?: 'NULL') . ", Definition exists: " . ($hasdefinitiondetail ? 'YES' : 'NO') . ", Is available: " . ($isavailable ? 'YES' : 'NO'), DEBUG_NORMAL);
+                        }
+                    } catch (Exception $e) {
+                        debugging("Rubric controller not available for grading area: {$gradingarea}, gradertype: {$gradertype}. Active method: " . ($activemethod ?: 'NULL') . ", Error: " . $e->getMessage(), DEBUG_NORMAL);
+                    }
+                }
             }
 
             $mformdata->{'grade' . $timing} = $DB->get_record(
@@ -1577,6 +1645,11 @@ class va {
             );
         }
 
+        // Ensure advancedgradinginstance is set even if empty, so form knows to check for rubrics.
+        if (!isset($mformdata->advancedgradinginstance)) {
+            $mformdata->advancedgradinginstance = new \stdClass();
+        }
+        
         $form = new form\assess('', $mformdata, 'post', '', array(
             'class' => 'gradingform',
         ));

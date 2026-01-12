@@ -639,6 +639,175 @@ function videoassessment_update_calendar($va) {
  * @param navigation_node $videoassessmentnode Video assessment navigation node
  * @return void
  */
+/**
+ * Automatically duplicate teacher rubric to peer, self, and class areas if needed.
+ *
+ * This ensures that when a rubric is created for the teacher area,
+ * it's automatically available for peer, self, and class assessors.
+ *
+ * @param int $contextid The context ID of the video assessment
+ * @return void
+ */
+function videoassessment_auto_duplicate_rubric($contextid) {
+    global $DB, $CFG;
+    
+    require_once($CFG->dirroot . '/grade/grading/lib.php');
+    require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
+    
+    // Get all grading areas for this context.
+    $allareas = $DB->get_records('grading_areas', ['contextid' => $contextid, 'component' => 'mod_videoassessment']);
+    
+    // Find any area that has a rubric definition (prefer teacher, but use any that exists).
+    $sourcearea = null;
+    $sourcedefinition = null;
+    
+    // First, try to find teacher area with rubric.
+    foreach ($allareas as $area) {
+        if ($area->areaname == 'beforeteacher') {
+            $definition = $DB->get_record('grading_definitions', [
+                'areaid' => $area->id,
+                'method' => 'rubric'
+            ]);
+            if ($definition && $definition->status == gradingform_controller::DEFINITION_STATUS_READY) {
+                $sourcearea = $area;
+                $sourcedefinition = $definition;
+                break;
+            }
+        }
+    }
+    
+    // If no teacher rubric found, check any other area that has a rubric.
+    if (!$sourcearea) {
+        foreach ($allareas as $area) {
+            $definition = $DB->get_record('grading_definitions', [
+                'areaid' => $area->id,
+                'method' => 'rubric'
+            ]);
+            if ($definition && $definition->status == gradingform_controller::DEFINITION_STATUS_READY) {
+                $sourcearea = $area;
+                $sourcedefinition = $definition;
+                break; // Use the first one found.
+            }
+        }
+    }
+    
+    if (!$sourcearea || !$sourcedefinition) {
+        return; // No rubric found in any area.
+    }
+    
+    // Get video assessment instance to check which areas are enabled.
+    $context = context::instance_by_id($contextid);
+    if ($context->contextlevel != CONTEXT_MODULE) {
+        return; // Not a module context.
+    }
+    
+    $cm = get_coursemodule_from_id('videoassessment', $context->instanceid, 0, false, IGNORE_MISSING);
+    if (!$cm) {
+        return; // Cannot find course module.
+    }
+    
+    $va = $DB->get_record('videoassessment', ['id' => $cm->instance]);
+    if (!$va) {
+        return;
+    }
+    
+    // Determine which areas need rubrics based on settings.
+    $areas_to_duplicate = [];
+    foreach ($allareas as $area) {
+        if ($area->id == $sourcearea->id) {
+            continue; // Skip the source area (wherever the rubric came from).
+        }
+        
+        // Check if this area should have a rubric based on settings.
+        $needsrubric = false;
+        if ($area->areaname == 'beforeteacher' && !empty($va->ratingteacher)) {
+            $needsrubric = true;
+        } else if ($area->areaname == 'beforepeer' && !empty($va->ratingpeer)) {
+            $needsrubric = true;
+        } else if ($area->areaname == 'beforeself' && !empty($va->ratingself)) {
+            $needsrubric = true;
+        } else if ($area->areaname == 'beforeclass' && !empty($va->ratingclass)) {
+            $needsrubric = true;
+        }
+        
+        if ($needsrubric) {
+            // Always add to duplication list, even if rubric exists.
+            // This ensures that when a template is selected for one area, it updates all areas.
+            $areas_to_duplicate[] = $area;
+        }
+    }
+    
+    if (empty($areas_to_duplicate)) {
+        return; // All areas already have rubrics.
+    }
+    
+    // Duplicate the rubric to each area that needs it.
+    $transaction = $DB->start_delegated_transaction();
+    
+    try {
+        foreach ($areas_to_duplicate as $targetarea) {
+            // Set the active method to 'rubric' for this area BEFORE creating the definition.
+            // Use context/component/area approach to get the manager.
+            $targetmanager = get_grading_manager($context, 'mod_videoassessment', $targetarea->areaname);
+            $targetmanager->set_active_method('rubric');
+            
+            // Check if this area already has a rubric definition - if so, delete it first.
+            $existingdefinition = $DB->get_record('grading_definitions', [
+                'areaid' => $targetarea->id,
+                'method' => 'rubric'
+            ]);
+            
+            if ($existingdefinition) {
+                // Delete existing criteria and levels first.
+                $existingcriteria = $DB->get_records('gradingform_rubric_criteria', ['definitionid' => $existingdefinition->id]);
+                foreach ($existingcriteria as $criterion) {
+                    $DB->delete_records('gradingform_rubric_levels', ['criterionid' => $criterion->id]);
+                }
+                $DB->delete_records('gradingform_rubric_criteria', ['definitionid' => $existingdefinition->id]);
+                $DB->delete_records('grading_definitions', ['id' => $existingdefinition->id]);
+            }
+            
+            // Clone the definition from source area.
+            $newdefinition = clone $sourcedefinition;
+            unset($newdefinition->id);
+            $newdefinition->areaid = $targetarea->id;
+            $newdefinition->timecreated = time();
+            $newdefinition->timemodified = time();
+            
+            $newdefinitionid = $DB->insert_record('grading_definitions', $newdefinition);
+            
+            // Copy criteria from source area.
+            $criteria = $DB->get_records('gradingform_rubric_criteria', ['definitionid' => $sourcedefinition->id], 'sortorder ASC');
+            foreach ($criteria as $criterion) {
+                // Create new criterion record with only the necessary fields.
+                $newcriterion = new \stdClass();
+                $newcriterion->definitionid = $newdefinitionid;
+                $newcriterion->sortorder = $criterion->sortorder;
+                $newcriterion->description = $criterion->description;
+                $newcriterion->descriptionformat = $criterion->descriptionformat;
+                $newcriterionid = $DB->insert_record('gradingform_rubric_criteria', $newcriterion);
+                
+                // Copy levels for this criterion.
+                $levels = $DB->get_records('gradingform_rubric_levels', ['criterionid' => $criterion->id], 'score ASC');
+                foreach ($levels as $level) {
+                    // Create new level record with only the necessary fields.
+                    $newlevel = new \stdClass();
+                    $newlevel->criterionid = $newcriterionid;
+                    $newlevel->score = $level->score;
+                    $newlevel->definition = $level->definition;
+                    $newlevel->definitionformat = $level->definitionformat;
+                    $DB->insert_record('gradingform_rubric_levels', $newlevel);
+                }
+            }
+        }
+        
+        $transaction->allow_commit();
+    } catch (Exception $e) {
+        $transaction->rollback($e);
+        debugging('Failed to auto-duplicate rubric: ' . $e->getMessage(), DEBUG_NORMAL);
+    }
+}
+
 function videoassessment_extend_settings_navigation($settings, navigation_node $videoassessmentnode) {
     global $PAGE;
     $areaname = '';
@@ -647,6 +816,13 @@ function videoassessment_extend_settings_navigation($settings, navigation_node $
     }
     $hasgrade = videoassessment_check_has_grade($PAGE->cm->instance);
     $areas = videoassessment_get_areas($PAGE->cm->context->id);
+    
+    // Auto-duplicate rubric if teacher rubric exists but peer/self/class don't.
+    // Check on grading management pages and after template selection.
+    if (strpos($PAGE->url->get_path(), '/grade/grading/manage.php') !== false ||
+        strpos($PAGE->url->get_path(), '/grade/grading/pick.php') !== false) {
+        videoassessment_auto_duplicate_rubric($PAGE->cm->context->id);
+    }
 
     // Build the HTML but don't echo it directly (which would break DOCTYPE).
     // Instead, add it to the page footer via JavaScript to ensure it's after DOCTYPE.

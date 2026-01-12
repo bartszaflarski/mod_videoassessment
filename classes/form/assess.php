@@ -128,13 +128,27 @@ class assess extends \moodleform {
 
         $grademenu = make_grades_menu($va->va->grade);
         $gradinginstances = $this->use_advanced_grading();
+        
+        // Check if we have any advanced grading instances.
+        // Even if $gradinginstances is set, it might be empty, so check for actual instances.
+        $hasadvancedgrading = false;
+        if ($gradinginstances && is_object($gradinginstances)) {
+            foreach ($va->timings as $timing) {
+                if (!empty($gradinginstances->$timing)) {
+                    $hasadvancedgrading = true;
+                    break;
+                }
+            }
+        }
 
         foreach ($va->timings as $timing) {
 
             if (property_exists($this->_customdata, 'grade' . $timing)) {
                 $grade = $this->_customdata->{'grade' . $timing};
             }
-            if ($gradinginstances) {
+            
+            // Use advanced grading if we have at least one instance.
+            if ($hasadvancedgrading) {
                 // Grade type -rubric.
                 $mform->addElement('hidden', 'gradecategory' . $timing, 1);
                 $mform->setType('gradecategory'.$timing, PARAM_RAW);

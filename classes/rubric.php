@@ -63,6 +63,10 @@ class rubric {
         $this->managers = new \stdClass();
         $this->controllers = new \stdClass();
 
+        // Auto-duplicate rubric before initializing controllers.
+        // This ensures rubrics are available for all grader types.
+        videoassessment_auto_duplicate_rubric($va->context->id);
+
         foreach ($va->gradingareas as $gradingarea) {
             if ($gradingareas && !in_array($gradingarea, $gradingareas)) {
                 continue;
@@ -70,8 +74,42 @@ class rubric {
 
             $this->managers->$gradingarea = get_grading_manager($va->context, 'mod_videoassessment', $gradingarea);
             $this->controllers->$gradingarea = null;
-            if ($gradingmethod = $this->get_manager($gradingarea)->get_active_method()) {
-                $this->controllers->$gradingarea = $this->get_manager($gradingarea)->get_controller($gradingmethod);
+            
+            // Check if there's an active method.
+            $manager = $this->get_manager($gradingarea);
+            $gradingmethod = $manager->get_active_method();
+            
+            // If no active method but a rubric definition exists, set it to 'rubric'.
+            if (!$gradingmethod) {
+                try {
+                    $controller = $manager->get_controller('rubric');
+                    if ($controller) {
+                        $isdefined = $controller->is_form_defined();
+                        $isavailable = $controller->is_form_available();
+                        
+                        if ($isdefined && $isavailable) {
+                            // Rubric exists and is ready, so set it as the active method.
+                            $manager->set_active_method('rubric');
+                            $gradingmethod = 'rubric';
+                        } else if ($isdefined && !$isavailable) {
+                            // Definition exists but not available - might be DRAFT status.
+                            // Try to set it anyway - the controller will handle it.
+                            $manager->set_active_method('rubric');
+                            $gradingmethod = 'rubric';
+                        }
+                    }
+                } catch (Exception $e) {
+                    // No rubric available, continue.
+                }
+            }
+            
+            if ($gradingmethod) {
+                try {
+                    $this->controllers->$gradingarea = $manager->get_controller($gradingmethod);
+                } catch (Exception $e) {
+                    // Controller creation failed, leave as null.
+                    $this->controllers->$gradingarea = null;
+                }
             }
         }
     }
@@ -113,6 +151,7 @@ class rubric {
      *
      * Retrieves the grading controller instance only if it exists,
      * is configured, and has an available form for grading.
+     * Falls back to teacher's rubric if the requested area doesn't have one.
      *
      * @param string $gradingarea The grading area identifier
      * @return \gradingform_rubric_controller|null Available grading controller or null if not available
@@ -122,6 +161,72 @@ class rubric {
         if ($controller && $controller->is_form_available()) {
             return $controller;
         }
+        
+        // If controller exists but form is not available, check why.
+        if ($controller && $controller->is_form_defined() && !$controller->is_form_available()) {
+            // Definition exists but not available - might be DRAFT status.
+            // For now, still return it - the form will handle it.
+            // TODO: Check if we should allow DRAFT rubrics or require READY status.
+            return $controller;
+        }
+        
+        // If controller wasn't created in constructor, try to create it now.
+        // This can happen if the active method wasn't set when constructor ran.
+        $manager = $this->get_manager($gradingarea);
+        if ($manager) {
+            // Check if rubric definition exists even if active method isn't set.
+            try {
+                $rubriccontroller = $manager->get_controller('rubric');
+                if ($rubriccontroller && $rubriccontroller->is_form_defined()) {
+                    // Rubric definition exists - check if it's available.
+                    if ($rubriccontroller->is_form_available()) {
+                        // Rubric exists and is ready, set it as active and cache it.
+                        $manager->set_active_method('rubric');
+                        $this->controllers->$gradingarea = $rubriccontroller;
+                        return $rubriccontroller;
+                    } else {
+                        // Definition exists but not available (DRAFT status).
+                        // Set active method anyway and return controller - form might still work.
+                        $manager->set_active_method('rubric');
+                        $this->controllers->$gradingarea = $rubriccontroller;
+                        return $rubriccontroller;
+                    }
+                }
+            } catch (Exception $e) {
+                // No rubric available, continue to fallback.
+            }
+        }
+        
+        // Fallback: If this is not the teacher area and no rubric exists,
+        // try to use the teacher's rubric as a fallback.
+        if ($gradingarea != 'beforeteacher' && strpos($gradingarea, 'teacher') === false) {
+            $teachermanager = $this->get_manager('beforeteacher');
+            if ($teachermanager) {
+                $teachercontroller = $this->get_controller('beforeteacher');
+                if ($teachercontroller && $teachercontroller->is_form_available()) {
+                    // Auto-duplicate the rubric to this area so it's available.
+                    videoassessment_auto_duplicate_rubric($teachermanager->get_context()->id);
+                    
+                    // Reload the controller for this area after duplication.
+                    $manager = $this->get_manager($gradingarea);
+                    if ($manager) {
+                        // Check if rubric is now available.
+                        try {
+                            $rubriccontroller = $manager->get_controller('rubric');
+                            if ($rubriccontroller && $rubriccontroller->is_form_available()) {
+                                // Set active method and cache controller.
+                                $manager->set_active_method('rubric');
+                                $this->controllers->$gradingarea = $rubriccontroller;
+                                return $rubriccontroller;
+                            }
+                        } catch (Exception $e) {
+                            // Still not available.
+                        }
+                    }
+                }
+            }
+        }
+        
         return null;
     }
 }
