@@ -26,9 +26,9 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->version   = 2025120806;
+$plugin->version   = 2025120807;
 $plugin->requires  = 2011112900;
 $plugin->component = 'mod_videoassessment';
 $plugin->maturity = MATURITY_STABLE;
-$plugin->release = '1.0.1 (Build: 2025120806)'; // User-friendly version number.
+$plugin->release = '1.0.1 (Build: 2025120807)'; // User-friendly version number.
 $plugin->supported = [400, 403];
