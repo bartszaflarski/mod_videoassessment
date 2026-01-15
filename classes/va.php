@@ -628,6 +628,7 @@ class va {
         $table->define_headers($headers);
         $table->setup();
 
+        // Get students only (excluding teachers) for both table rows and dropdown options.
         $allusers = $this->get_students(null, 0);
         $users = $this->get_students();
 
@@ -643,13 +644,16 @@ class va {
             $peernames = array();
             foreach ($peers as $peer) {
                 $this->viewurl->params(array('action' => 'peerdel', 'userid' => $user->id, 'peerid' => $peer, 'sesskey' => sesskey()));
-                @$peernames[] = fullname($allusers[$peer]) . ' ' . $OUTPUT->action_icon($this->viewurl, $delicon);
+                // Look up peer name from allusers (includes teachers).
+                $peername = isset($allusers[$peer]) ? fullname($allusers[$peer]) : 'User ' . $peer;
+                @$peernames[] = $peername . ' ' . $OUTPUT->action_icon($this->viewurl, $delicon);
             }
             \core_collator::asort($peernames);
             $peercell = implode(\html_writer::empty_tag('br'), $peernames);
 
+            // Include ALL users (including teachers) in dropdown options.
             $opts = array();
-            foreach ($users as $candidate) {
+            foreach ($allusers as $candidate) {
                 if ($candidate->id != $user->id && !in_array($candidate->id, $peers)) {
                     $opts[$candidate->id] = fullname($candidate);
                 }
@@ -1233,9 +1237,52 @@ class va {
             $groupids = array(0);
         }
 
+        // Always filter out teachers for both course-wide and group assignments.
+        $coursecontext = \context_course::instance($this->course->id);
+        
+        // Get the student role ID.
+        $studentrole = $DB->get_record('role', ['shortname' => 'student'], 'id');
+        if (!$studentrole) {
+            return; // No student role found, cannot proceed.
+        }
+
+        // Get role IDs for non-student roles (teacher, editingteacher, manager).
+        $excluderoles = $DB->get_records_select('role',
+            "shortname IN ('teacher', 'editingteacher', 'manager', 'coursecreator')",
+            null, '', 'id');
+        $excluderoleids = array_keys($excluderoles);
+
         foreach ($groupids as $groupid) {
+            // Always filter teachers: use get_enrolled_users with capability check, then filter by role.
             $users = get_enrolled_users($this->context, 'mod/videoassessment:submit', $groupid, 'u.id');
-            $userids = array_keys($users);
+            
+            // Filter out teachers for both course-wide and group assignments.
+            $userids = array();
+            foreach ($users as $user) {
+                // Check if user has student role.
+                $hasstudentrole = user_has_role_assignment($user->id, $studentrole->id, $coursecontext->id);
+                
+                // Check if user has any excluded role.
+                $hasexcludedrole = false;
+                if (!empty($excluderoleids)) {
+                    foreach ($excluderoleids as $roleid) {
+                        if (user_has_role_assignment($user->id, $roleid, $coursecontext->id)) {
+                            $hasexcludedrole = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // Only include users with student role and without excluded roles.
+                if ($hasstudentrole && !$hasexcludedrole) {
+                    $userids[] = $user->id;
+                }
+            }
+            
+            // Skip if no users found.
+            if (empty($userids)) {
+                continue;
+            }
 
             $mappings = $this->get_random_peers_for_users($userids, $this->va->usedpeers);
 
@@ -1444,6 +1491,95 @@ class va {
 
         $PAGE->requires->js_call_amd('mod_videoassessment/module', 'mainInit', array($this->cm->id));
         $PAGE->requires->js_call_amd('mod_videoassessment/module', 'assessInit');
+        
+        // Add inline script with immediate functionality for remark textarea hide/show
+        $PAGE->requires->js_amd_inline("
+            require(['jquery'], function(\$) {
+                console.log('[VideoAssessment] Inline script loaded');
+                
+                // Mobile detection function
+                function isMobile() {
+                    var width = window.innerWidth;
+                    var height = window.innerHeight;
+                    var isPortrait = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+                    if (!isPortrait && width <= 768) {
+                        isPortrait = height > width || height >= width * 0.8;
+                    }
+                    return width <= 768 && isPortrait;
+                }
+                
+                // Get video container
+                function getVideoContainer() {
+                    return \$('.assess-form-videos, .path-mod-videoassessment .assess-form-videos');
+                }
+                
+                // Hide/show video functions with animation
+                function hideVideo() {
+                    if (isMobile()) {
+                        var \$container = getVideoContainer();
+                        console.log('[VideoAssessment] Hiding video, containers found:', \$container.length);
+                        if (\$container.length > 0) {
+                            \$container.fadeOut(300);
+                        }
+                    }
+                }
+                
+                function showVideo() {
+                    if (isMobile()) {
+                        var \$container = getVideoContainer();
+                        if (\$container.length > 0) {
+                            \$container.fadeIn(300);
+                        }
+                    }
+                }
+                
+                // Setup handlers for remark textareas
+                function setupRemarkHandlers() {
+                    console.log('[VideoAssessment] Setting up remark handlers...');
+                    
+                    // Find remark textareas
+                    var \$remarkTextareas = \$('.remark textarea, td.remark textarea, .criterion .remark textarea, .gradingform_rubric .remark textarea');
+                    console.log('[VideoAssessment] Found remark textareas:', \$remarkTextareas.length);
+                    
+                    // Handle focus/blur
+                    \$remarkTextareas.off('focus.videoassessment-remark blur.videoassessment-remark')
+                        .on('focus.videoassessment-remark', function() {
+                            console.log('[VideoAssessment] Remark textarea focused!');
+                            hideVideo();
+                        })
+                        .on('blur.videoassessment-remark', function() {
+                            setTimeout(function() {
+                                var \$focused = \$('.remark textarea:focus, td.remark textarea:focus');
+                                if (\$focused.length === 0) {
+                                    console.log('[VideoAssessment] Remark textarea blurred, showing video');
+                                    showVideo();
+                                }
+                            }, 150);
+                        });
+                    
+                    // Catch-all click handler
+                    \$(document).on('click.videoassessment-remark-all', function(e) {
+                        var \$target = \$(e.target);
+                        var isRemark = \$target.closest('.remark').length > 0 || 
+                                       \$target.is('.remark') ||
+                                       \$target.closest('.remark textarea').length > 0 ||
+                                       \$target.is('.remark textarea');
+                        
+                        if (isRemark && isMobile()) {
+                            console.log('[VideoAssessment] Clicked in remark area');
+                            hideVideo();
+                        }
+                    });
+                }
+                
+                // Setup immediately and after delays
+                setTimeout(setupRemarkHandlers, 100);
+                setTimeout(setupRemarkHandlers, 500);
+                setTimeout(setupRemarkHandlers, 1500);
+                setTimeout(setupRemarkHandlers, 3000);
+            });
+        ");
+        
         $PAGE->requires->js_call_amd('mod_videoassessment/assess', 'videoassessmentAssess', array());
         $o = '';
 
@@ -2732,13 +2868,16 @@ class va {
      * @return array Mapping: userid => int[] peer ids
      */
     public function get_random_peers_for_users(array $userids, $numpeers) {
-        $maxretry = 3; // Maximum retry count to avoid a "stuck" state.
-
         assert(is_numeric($numpeers));
+        
+        // Initialize peers array for all users.
+        $peers = array();
+        foreach ($userids as $userid) {
+            $peers[$userid] = array();
+        }
         
         // Handle unlimited peers case (-1 means all other users).
         if ($numpeers == -1) {
-            $peers = array();
             foreach ($userids as $userid) {
                 // Assign all other users as peers.
                 $peers[$userid] = array_values(array_diff($userids, array($userid)));
@@ -2746,84 +2885,85 @@ class va {
             return $peers;
         }
         
-        assert(count($userids) > $numpeers);
-
-        $inner = function ($userids, $numpeers) {
-            $peers = array_combine(
-                $userids,
-                array_fill(0, count($userids), array())
-            );
-
-            for ($p = 0; $p < $numpeers; $p++) {
-                $slots = array_values($userids);
-                $pieces = array_values($userids);
-
-                foreach ($userids as $userid) {
-
-                    $slotavailpieces = array_map(function ($slot) use (&$pieces, &$peers) {
-                        return (object) array(
-                            'slot' => $slot,
-                            'pieces' => array_values(array_filter($pieces, function ($piece) use ($slot, &$peers) {
-                                return $piece != $slot && !in_array($piece, $peers[$slot]);
-                            })),
-                        );
-                    }, $slots);
-                    uasort($slotavailpieces, function ($a, $b) {
-                        return count($a->pieces) - count($b->pieces);
-                    });
-
-                    $pieceavailslots = array_map(function ($piece) use (&$slots, &$peers) {
-                        return (object) array(
-                            'piece' => $piece,
-                            'slots' => array_values(array_filter($slots, function ($slot) use ($piece, &$peers) {
-                                return $slot != $piece && !in_array($piece, $peers[$slot]);
-                            })),
-                        );
-                    }, $pieces);
-                    uasort($pieceavailslots, function ($a, $b) {
-                        return count($a->slots) - count($b->slots);
-                    });
-
-                    $minslotpieces = reset($slotavailpieces);
-                    $minpieceslots = reset($pieceavailslots);
-                    if (empty($minslotpieces->pieces) || empty($minpieceslots->slots)) {
-                        throw new Exception();
-                    }
-
-                    if (count($minslotpieces->pieces) < count($minpieceslots->slots)) {
-                        $slot = $minslotpieces->slot;
-                        $piece = $minslotpieces->pieces[mt_rand(0, count($minslotpieces->pieces) - 1)];
-                    } else {
-                        $slot = $minpieceslots->slots[mt_rand(0, count($minpieceslots->slots) - 1)];
-                        $piece = $minpieceslots->piece;
-                    }
-
-                    assert(in_array($slot, $slots));
-                    assert(in_array($piece, $pieces));
-                    $slots = array_diff($slots, array($slot));
-                    $pieces = array_diff($pieces, array($piece));
-
-                    $peers[$slot][] = $piece;
+        // Check if we have enough users. Need at least numpeers + 1 users.
+        if (count($userids) <= $numpeers) {
+            // Not enough users - assign as many peers as possible.
+            foreach ($userids as $userid) {
+                $peers[$userid] = array_values(array_diff($userids, array($userid)));
+            }
+            return $peers;
+        }
+        
+        // Simple, reliable algorithm: assign peers round by round.
+        // Shuffle user list for randomness.
+        $shuffled = $userids;
+        shuffle($shuffled);
+        $numusers = count($shuffled);
+        
+        // For each round (peer slot 0 to numpeers-1), assign one peer to each user.
+        for ($round = 0; $round < $numpeers; $round++) {
+            // Create a list of users that still need peers in this round.
+            $usersneedingpeers = array();
+            foreach ($shuffled as $userid) {
+                if (count($peers[$userid]) < $numpeers) {
+                    $usersneedingpeers[] = $userid;
                 }
             }
-
-            return $peers;
-        };
-
-        // When the total number of users and the number of selected peers are close,
-        // a deadlock state may occasionally occur. Retry up to a maximum of $maxretry times.
-        for ($i = 0; $i < $maxretry; $i++) {
-            try {
-                return $inner($userids, $numpeers);
-            } catch (Exception $ex) {
-                continue;
+            
+            // Shuffle the list for randomness.
+            shuffle($usersneedingpeers);
+            
+            // For each user needing a peer, assign one.
+            foreach ($usersneedingpeers as $userid) {
+                // Get all potential peers (all other users).
+                $potentialpeers = array_values(array_diff($shuffled, array($userid)));
+                shuffle($potentialpeers);
+                
+                // Find the first peer that:
+                // 1. Is not the user themselves
+                // 2. Hasn't been assigned to this user yet
+                // 3. This user hasn't been assigned to that peer yet (optional, but better distribution)
+                $assigned = false;
+                foreach ($potentialpeers as $peerid) {
+                    if (!in_array($peerid, $peers[$userid])) {
+                        $peers[$userid][] = $peerid;
+                        $assigned = true;
+                        break;
+                    }
+                }
+                
+                // If we couldn't assign (shouldn't happen), log a warning.
+                if (!$assigned) {
+                    debugging("Could not assign peer to user $userid in round $round. Current peers: " . implode(',', $peers[$userid]), DEBUG_NORMAL);
+                }
             }
         }
-
-        // Failed after exceeding $maxretry attempts.
-        throw new RuntimeException(
-            sprintf('Failed to select random %d peers for %d users', $numpeers, count($userids))
-        );
+        
+        // Final verification: ensure everyone has the required number of peers.
+        // This handles edge cases where the algorithm above didn't assign enough.
+        foreach ($userids as $userid) {
+            while (count($peers[$userid]) < $numpeers) {
+                $found = false;
+                // Get all other users as potential peers.
+                $remaining = array_values(array_diff($userids, array($userid)));
+                shuffle($remaining);
+                
+                foreach ($remaining as $peerid) {
+                    if (!in_array($peerid, $peers[$userid])) {
+                        $peers[$userid][] = $peerid;
+                        $found = true;
+                        break;
+                    }
+                }
+                if (!$found) {
+                    // Not enough unique users - this shouldn't happen if numpeers < count(userids).
+                    debugging("User $userid only has " . count($peers[$userid]) . " peers but needs $numpeers. Total users: " . count($userids), DEBUG_NORMAL);
+                    break;
+                }
+            }
+        }
+        
+        return $peers;
     }
 
     /**

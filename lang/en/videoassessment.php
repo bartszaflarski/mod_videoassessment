@@ -18,7 +18,7 @@
  * Video assessment
  *
  * @package    mod_videoassessment
- * @copyright  2024 Don Hinkleman (hinkelman@mac.com)
+ * @copyright  2024 Don Hinkleman (hinkleman@mac.com)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -38,21 +38,21 @@ $string['aftervideo'] = 'After video';
 $string['allowstudentpeerselection'] = 'Allow students to select peers';
 $string['allowstudentpeerselection_help'] = 'If enabled, students can select peer partners by themselves.';
 $string['allowstudentupload'] = 'Students can upload videos';
-$string['allowstudentupload_help'] = 'If enabled, students can upload videos one by one. Bulk upload is available only for teachers.';
+$string['allowstudentupload_help'] = 'If enabled, students can upload videos one by one. Bulk upload is available only for teachers in the "Advanced options" section.';
 $string['allscores'] = '</span><span class="red">Self,</span> <span class="blue">Peer,</span> <span class="green">Teacher,</span> <span class="orange"> and Class</span> Scores';
 $string['assess'] = 'Assess';
-$string['assess_help'] = 'In the assess stage, students do self-assessment, peer assessment with the rubrics set up in Advanced Grading.  It is also possible to give a student the right to design a rubric by giving one of them ‘teacher-rights’ or by designing a rubric on paper for the teacher to input. By default, students cannot see the teacher’s scoring until after completing self assessment. Then students can view the teacher’s assessment.';
+$string['assess_help'] = 'In the assess stage, students do self-assessment, peer assessment with the rubrics set up in Advanced Grading.  It is also possible to give a student the right to design a rubric by giving one of them \'teacher-rights\' or by designing a rubric on paper for the teacher to input. By default, students cannot see the teacher\'s scoring until after completing self assessment. Then students can view the teacher\'s assessment.';
 $string['assessagain'] = 'Assess again';
 $string['assessedby'] = 'Assessed by';
 $string['assignpeers'] = 'Assign peers';
-$string['assignpeers_help'] = 'From zero to three peers can be assigned for peer assessment. One peer is the default. There are three methods to assign peers: 1) randomly across the course, 2) randomly across a group, and 3) manually. Both ways of random assignments can be adjusted manually after being auto-assigned.';
+$string['assignpeers_help'] = 'Enter the number of peer assessors.  Two peers is the default. There are three methods to assign peer assessors: 1) randomly from enrollees with only \'student\' role in the course, 2) randomly from members in a course group, and 3) manually. Both ways of random assignments can be adjusted manually after being auto-assigned.';
 $string['assignpeerassessors'] = 'Assign Peer Assessors';
 $string['assignpeersaftersave'] = 'Save this activity first, then you can assign peers.';
 $string['peerassignmentrequired'] = 'You must assign peer assessors when Peer % is greater than 0 or Number of Peer Assessments is greater than 0. Either assign peers or set both values to 0.';
 $string['assignpeersrandomly'] = 'Assign peers randomly';
 $string['assignpeerassessorsrandomly'] = 'Assign peer assessors randomly';
 $string['associate'] = 'Associate';
-$string['associate_help'] = 'After uploading files, each video file must be associated to the correct performing student. The file is matched by selecting one student by their moodle login name (user) in the course. This is called the “associate” phase in the process (after “upload” and before “assess”). In this screen, a drop-down menu lists all the students (users) in the course (or in the section of the course).';
+$string['associate_help'] = 'After uploading files, each video file must be associated to the correct performing student. The file is matched by selecting one student by their moodle login name (user) in the course. This is called the "associate" phase in the process (after "upload" and before "assess"). In this screen, a drop-down menu lists all the students (users) in the course (or in the section of the course).';
 $string['associated'] = 'Associated';
 $string['associations'] = 'Associations';
 $string['availabledate'] = 'Available from';
@@ -75,7 +75,7 @@ $string['confirmdeletevideos'] = 'Are you sure you want to delete {$a} videos?';
 $string['course'] = 'course';
 $string['currentgrade'] = 'Current grade in gradebook';
 $string['delayedteachergrade'] = 'Delayed Teacher Grade';
-$string['delayedteachergrade_help'] = 'If enabled ‘yes’, the teacher assessment ratings will not be shown to the student, until he/she has completed his/her self assessment. This will alleviate any bias in student scoring by not seeing a teacher score before they start assessing.';
+$string['delayedteachergrade_help'] = 'If enabled \'yes\', the teacher assessment ratings will not be shown to the student, until he/she has completed his/her self assessment. This will alleviate any bias in student scoring by not seeing a teacher score before they start assessing.';
 $string['deleteselectedvideos'] = 'Delete selected videos';
 $string['deletevideo'] = 'Delete video';
 $string['deletevideos'] = 'Bulk Video Deletion';
@@ -143,7 +143,7 @@ $string['publishvideos_videos'] = 'Videos';
 $string['publishvideos_videos_help'] = 'Selected videos will be published to an existing course or a new course.';
 $string['publishvideostocourse'] = 'Publish videos to a course';
 $string['ratingpeer'] = 'Peer weighting';
-$string['ratingpeer_help'] = 'Set the weighting of the peer grading within a student’s total grade. More than one peer can grade the student (up to 3), and the average score of the peers will be displayed. In reports, the peer’s scores are usually shown in the color ‘blue’.';
+$string['ratingpeer_help'] = 'Set the weighting of the peer grading within a student\'s total grade. More than one peer can grade the student (default is 2), and the average score of the peers will be displayed. In reports, the peer\'s scores are usually shown in the color \'blue\'.';
 $string['ratings'] = 'Ratings';
 $string['ratings_help'] = 'When combining self/peer/class/teacher assessments, a teacher can set the weighting of each type of assessment within 100%. Typical weightings might be Teacher-80%, Self-10%, Peer-10%, Class-0%. The total of the percentages must be 100%, or a warning will appear. If you wish for the teacher to be the only assessor, then set the percentages like this: Teacher-100%, Self-0%, Peer-0%, Class-0%.';
 $string['assessorsandweightings'] = 'Assessors and weightings';
@@ -153,9 +153,9 @@ $string['autodeletefiles'] = 'Automatic file deletion at course end date';
 $string['autodeletefiles_help'] = 'If enabled, all video files associated with this activity will be automatically deleted when the course end date is reached. This helps manage storage space after courses are completed.';
 $string['task_automatic_file_deletion'] = 'Automatic file deletion at course end date';
 $string['ratingself'] = 'Self weighting';
-$string['ratingself_help'] = 'Set the weighting of the self grading within a student’s total grade. Self assessment is often influenced by others” scores, so the teacher’s score is not shown until a student has completed her/his self assessment. The self scores are usually shown in the color ‘red’.';
+$string['ratingself_help'] = 'Set the weighting of the self grading within a student\'s total grade. Self assessment is often influenced by others" scores, so the teacher\'s score is not shown until a student has completed her/his self assessment. The self scores are usually shown in the color \'red\'.';
 $string['ratingteacher'] = 'Teacher weighting';
-$string['ratingteacher_help'] = 'Set the weighting of the teacher’s grading of a student’s total grade. More than one teacher can grade the student, and the average score of the teachers will be displayed. If the teacher is the only rater, then this setting should be 100%, and all others 0%. The teacher’s scores are usually shown in the color ‘green’.';
+$string['ratingteacher_help'] = 'Set the weighting of the teacher\'s grading of a student\'s total grade. More than one teacher can grade the student, and the average score of the teachers will be displayed. If the teacher is the only rater, then this setting should be 100%, and all others 0%. The teacher\'s scores are usually shown in the color \'green\'.';
 $string['reallydeletevideo'] = 'Are you sure you want to delete this video?';
 $string['reallyresetallpeers'] = 'This will reset peer assignments and re-assign randomly. Continue?';
 $string['remark'] = 'Remark';
@@ -199,7 +199,7 @@ $string['uploadvideos'] = 'Upload videos';
 $string['startrecoding'] = 'Start Recording';
 $string['pause'] = 'Pause';
 $string['usedpeers'] = 'Number of Peer Assessors';
-$string['usedpeers_help'] = 'Enter the number of peer assessors (0 or more). In the Ratings menu, the teacher can then assign the peer automatically or manually. The default is 2 peer assessors.';
+$string['usedpeers_help'] = 'Enter the number of peer assessors (0 or more). In Assign Peer Assessors below, the teacher can then assign the peer automatically or manually. The default is 2 peer assessors.';
 $string['usedpeerserror'] = 'Number of Peer Assessors must be a non-negative integer (0 or greater).';
 $string['numberofpeerassessors'] = 'Number of Peer Assessors';
 $string['unlimited'] = 'Unlimited';
@@ -215,7 +215,7 @@ $string['videoalreadyassociated'] = '{$a} has been already associated with a vid
 $string['videoassessment:addinstance'] = 'Add a new video assessment';
 $string['videoassessment:associate'] = 'Associate bulk uploaded videos with users';
 $string['videoassessment:bulkupload'] = 'Bulk upload videos';
-$string['videoassessment:bulkupload_help'] = 'A teacher can drag multiple video files into this window. The files will upload and be converted in order. 10-20 files may take up to an hour depending on the resolution. Avoid high resolution videos such as 4K as the size is too large for efficient handling and s unnecessary for the purpose of performance assessment. VGA quality or 720HD 30fps is preferable. In testing, all video formats were compatible.';
+$string['videoassessment:bulkupload_help'] = 'A teacher can drag multiple video files into this window. The files will upload and be converted in order. 10-20 files may take up to an hour depending on the resolution. Avoid high resolution videos such as 4K as the size is too large for efficient handling and is unnecessary for the purpose of performance assessment. VGA quality or 720HD 30fps is preferable. In testing, all video formats were compatible.';
 $string['videoassessment:exportownsubmission'] = 'Export own submission';
 $string['videoassessment:grade'] = 'Grade video assessment';
 $string['videoassessment:gradepeer'] = 'Grade peer video assessment';
@@ -235,7 +235,7 @@ $string['weighting'] = 'Weighting';
 $string['xfeedback'] = '{$a} feedback';
 $string['xunassignedstudents'] = '{$a} unassigned students';
 $string['grade'] = 'Grading';
-$string['grade_help'] = 'This section is for settings that combine the self/peer/class/teacher grades. One combined grade will be uploaded to the Gradebook in this class. Scoring details can be analyzed and downloaded in Excel format by going to the Assess page and finding the download link. In addition, this section has settings for pre-calibration and fairness bonus to improve self assessment.';
+$string['grade_help'] = 'This section is for settings that combine the self/peer/class/teacher grades. One combined grade will be uploaded to the Gradebook in this class. Scoring details can be analyzed and downloaded in Excel format by going to the main assessment page and finding the download link. In addition, the Advanced options section has optional settings for pre-calibration and fairness bonus to improve self assessment.';
 $string['managevideo'] = 'Manage videos';
 $string['class'] = 'Class';
 $string['open'] = 'Open Class Grading';
@@ -248,7 +248,7 @@ $string['duplicateerrors'] = 'Duplicate Errors';
 $string['readyforuse'] = 'Ready for use';
 $string['allparticipants'] = 'All participants';
 $string['assignclass'] = 'Assign class';
-$string['assignclass_help'] = 'This feature allows a teacher to turn on or turn off the “Class” mode of assessment. The “Class” mode is for all the students watching a live, real-time performance to assess the speaker without a recording. This is more difficult to assess accurately, due to the time pressure, but it gives students practice in using and understanding the rubric, and keeps them learning actively instead of half-listening to a presentation. Students must log into the class website and find the appropriate Video Assessment activity on their course. They search for the student doing the performance and begin choosing the scores on each scale. The scores of all students are averaged for one single “Class” score for the whole class, thus mitigating too high or too low scores.';
+$string['assignclass_help'] = 'This feature allows a teacher to turn on or turn off the "Class" mode of assessment. The "Class" mode is for all the students watching a live, real-time performance to assess the speaker without a recording. This is more difficult to assess accurately, due to the time pressure, but it gives students practice in using and understanding the rubric, and keeps them learning actively instead of half-listening to a presentation. Students must log into the class website and find the appropriate Video Assessment activity on their course. They search for the student doing the performance and begin choosing the scores on each scale. The scores of all students are averaged for one single "Class" score for the whole class, thus mitigating too high or too low scores.';
 $string['sortid'] = 'Sort by ID';
 $string['sortname'] = 'Sort by name';
 $string['sortmanually'] = 'Sort manually';
@@ -268,7 +268,7 @@ $string['inputnewcourseshortname'] = 'Input a new course short name';
 $string['courseshortnameexist'] = 'Short name is already used for another course';
 $string['pleasechoosevideos'] = 'Please choose videos';
 $string['trainingpretest'] = 'Training Pre-test';
-$string['trainingpretest_help'] = 'Similar to ‘calibrating’ for scoring a test, this Training Pre-test function forces students to first pass a training test before moving on to actual scoring. Students watch an uploaded video and rubric provided by the teacher. They can only pass when they score within a decided difference (20% for example) from the pre-entered desired scores by the teacher.';
+$string['trainingpretest_help'] = 'Similar to \'calibrating\' for scoring a test, this Training Pre-test function forces students to first pass a training test before moving on to actual scoring. Students watch an uploaded video and rubric provided by the teacher. They can only pass when they score within a decided difference (20% for example) from the pre-entered desired scores by the teacher.';
 $string['fullnamecourse'] = 'Course Full Name';
 $string['shortnamecourse'] = 'Course Short Name';
 $string['no'] = 'No';
@@ -278,7 +278,7 @@ $string['failed'] = 'Fail';
 $string['training'] = 'Training';
 $string['results'] = 'Results';
 $string['passednotice'] = 'Congratulations! All of your scores were near standard scores!<br />Go to {$a} assessment.';
-$string['failednotice'] = 'Sorry. Some of your scores were {$a->accepteddifference}% different from standard scores. You must have all “O”, no “X”.<br />{$a->button}';
+$string['failednotice'] = 'Sorry. Some of your scores were {$a->accepteddifference}% different from standard scores. You must have all "O", no "X".<br />{$a->button}';
 $string['selfpeer'] = 'Self / Peer';
 $string['tryagain'] = 'Try again';
 $string['pleasedefinerubricforteacher'] = 'Please define rubric for teacher';
@@ -290,14 +290,14 @@ $string['notattempted'] = 'Not attempted';
 $string['trainingvideo'] = 'Training video';
 $string['trainingvideo_help'] = 'Upload a video for the students to practice and complete scoring on the training Pre-test.';
 $string['accepteddifference'] = 'Accepted difference in scores';
-$string['accepteddifference_help'] = 'Accepted difference in scores. Default 20%. Here the acceptable range, or ‘difference’ can be set for students’ scores, compared to
+$string['accepteddifference_help'] = 'Accepted difference in scores. Default 20%. Here the acceptable range, or \'difference\' can be set for students\' scores, compared to
 pre-entered teacher scores. If the student score lies outside the acceptable difference for any criterion on the rubric, they fail the Training Pre-test and must take it again.';
 $string['trainingdesc'] = 'Training explanation';
 $string['trainingdesc_help'] = 'Add an explanation to teach students how to score and what the accepted difference from teacher scores on each rubric criterion are. The students
-need to receive all ‘circles’ (within acceptable difference from teacher scores) to pass.';
+need to receive all \'circles\' (within acceptable difference from teacher scores) to pass.';
 $string['trainingdeschelp'] = 'Training explanation text';
-$string['trainingdesctext'] = 'To pass this training, you (red score) must evaluate each scale within xx% of the teacher’s score (green score). If you are xx% or under, you
-receive a “maru” “O”. If you are over xx%, you receive a “batsu” “X”. All scales must be “O” before you can pass.';
+$string['trainingdesctext'] = 'To pass this training, you (red score) must evaluate each scale within xx% of the teacher\'s score (green score). If you are xx% or under, you
+receive a "maru" "O". If you are over xx%, you receive a "batsu" "X". All scales must be "O" before you can pass.';
 $string['viewresult'] = 'View result';
 $string['beforetraining'] = 'Training Pre-test';
 
@@ -306,7 +306,7 @@ $string['url'] = 'URL';
 $string['url_help'] = 'This is a Youtube URL';
 $string['url_error'] = 'Please enter the correct Youtube URL';
 $string['ratingclass'] = 'ratingclass';
-$string['ratingclass_help'] = 'This rating is not used with video recordings, but for live performances, with all classmates making scores and giving comments. Usually at 0%, even if turned ‘on’, the purpose of the whole class rating is to keep the audience busy and learning the rubrics. It must be turned on in the Grading menu. In reports, the class average score is usually shown in the color ‘yellow’.';
+$string['ratingclass_help'] = 'This rating is not used with video recordings, but for live performances, with all classmates making scores and giving comments. Usually at 0%, even if turned \'on\', the purpose of the whole class rating is to keep the audience busy and learning the rubrics. It must be turned on in the Grading menu. In reports, the class average score is usually shown in the color \'yellow\'.';
 $string['clickonthe'] = 'Click on the';
 $string['donotclickhere'] = 'Do not click here.';
 $string['or'] = 'Or';
@@ -326,7 +326,7 @@ $string['uploadfile'] = 'Upload Video File';
 $string['uploadmessage'] = 'Your video file is over 500MB. Please retake the video at a lower resolution or re-upload a smaller file';
 
 $string['managevideos'] = 'Manage videos';
-$string['managevideos_help'] = 'The “Manage Videos” admin page has nine functions to click. You do not have to touch any function unless you wish to change the default settings.
+$string['managevideos_help'] = 'The "Manage Videos" admin page has nine functions to click. You do not have to touch any function unless you wish to change the default settings.
 <br />a. Upload a Video
 <br />b. Bulk Upload Videos
 <br />c. Bulk Video Deletion
@@ -343,7 +343,7 @@ $string['uploadfilesize'] = 'Size';
 $string['uploadmimetype'] = 'Type';
 $string['uploadstatus'] = 'Status';
 $string['uploadprogress'] = 'Progress';
-$string['notifications_help'] = 'Notifications send the assessment information to the students via their email inboxes or their mobile quickmail addresses. There are four kinds of notificiations:
+$string['notifications_help'] = 'Notifications send the assessment information to the students via their email inboxes or their mobile quickmail addresses. There are four kinds of notifications:
 <br />a. Teacher Comment notification
 <br />b. Peer Comment notification
 <br />c. Reminder notification
@@ -358,21 +358,21 @@ $string['teachercommentnotification_help'] = 'a. Teacher Comment notification is
 The email message format for each type of notification must be set up by the teacher.';
 
 $string['modgrade'] = 'Grade Type';
-$string['modgrade_help'] = 'For video assessment, do not change the default settings here for “Grade Type”. The Grade Type is “Point” and the maximum grade is “100”.  If you change the settings, the video assessment system may not work.';
+$string['modgrade_help'] = 'For video assessment, do not change the default settings here for "Grade Type". The Grade Type is "Point" and the maximum grade is "100".  If you change the settings, the video assessment system may not work.';
 
-$string['advancedgradingmethodsgroup'] = 'Grading methods';
-$string['advancedgradingmethodsgroup_help'] = 'For video assessment, do not change the default settings here for “Grading Method”. All settings use rubric, because that is the best method of performance assessment. If you change the settings, the video assessment system may not work.';
+$string['advancedgradingmethodsgroup'] = 'Create or Select rubric';
+$string['advancedgradingmethodsgroup_help'] = 'For video assessment, do not change the default settings here for "Grading Method". All settings use rubric, because that is the best method of performance assessment. If you change the settings, the video assessment system may not work.';
 $string['classgrading'] = 'Whole Class Grading';
-$string['classgrading_help'] = 'If you want the whole class of students to watch a live performance and assess it in real time, use this feature. To turn on whole class grading, click ‘Open Class Grading’.  The default is “Close class grading”.  All the student’s grades will be totaled into one average grade.';
+$string['classgrading_help'] = 'If you want the whole class of students to watch a live performance and assess it in real time, use this feature. To turn on whole class grading, click \'Open Class Grading\'.  The default is "Close class grading".  All the student\'s grades will be totaled into one average grade.';
 $string['peerfairnessbonus'] = 'Peer Fairness Bonus';
-$string['peerfairnessbonus_help'] = 'The Peer Fairness bonus rewards students who score ‘fairly’, that is, their scores are not all ‘100s” or “0s” and fairly close to what the teacher is scoring. The options for setting up this tool include deciding how much of a bonus (% of final score) you will assign, and how much of that bonus students will receive based on proximity to the teachers score.';
+$string['peerfairnessbonus_help'] = 'The Peer Fairness bonus rewards students who score \'fairly\', that is, their scores are not all \'100s" or "0s" and fairly close to what the teacher is scoring. The options for setting up this tool include deciding how much of a bonus (% of final score) you will assign, and how much of that bonus students will receive based on proximity to the teachers score.';
 $string['selffairnessbonus'] = 'Self Fairness Bonus';
-$string['selffairnessbonus_help'] = 'The Self Fairness bonus rewards students who score ‘fairly’, that is, their scores are not all ‘100s” or “0s” and fairly close to what the teacher is scoring. The options for setting up this tool include deciding how much of a bonus (% of final score) you will assign, and how much of that bonus students will receive based on proximity to the teachers score.';
+$string['selffairnessbonus_help'] = 'The Self Fairness bonus rewards students who score \'fairly\', that is, their scores are not all \'100s" or "0s" and fairly close to what the teacher is scoring. The options for setting up this tool include deciding how much of a bonus (% of final score) you will assign, and how much of that bonus students will receive based on proximity to the teachers score.';
 $string['uploadfile_help'] = 'There are two stages: Uploading the file, and then converting the file. The converting process compresses the file to 1/10th the size. Sometimes this takes a long time—over ten minutes. Please check if your camera is set on 4K, which is too high, and lower the resolution and lower the fps. VGA or 720hd, 30fps is better.';
 $string['uploadingvideo_help'] = 'You can share your recorded performance for assessment with three methods. In this screen, students and teachers can:
-<br />1) Upload a single file of your video performance here or
-<br />2) upload your file into YouTube and link to that video. Set your camera to its lowest resolution for fast response. Record a single video file in your device and upload here. Additionally, teachers can:
-<br />3) record on an SD card for bulk upload. Go to Manage Videos >> Bulk upload for that process. Note: this screen is only available to students if the default for “Allow student upload of videos” is kept at “Yes”.';
+<br />1) Upload your file to YouTube or another hosting service and post a URL link to that video. Note: Youtube "Shorts" cannot be used.
+<br />2) Upload a single file of your video performance from your device. Set your camera to its lowest resolution for smaller file size and faster upload times. Note: options 2 and 3 are only available to students if the default for "Students can upload videos" under "Video submissions" in the Settings menu is kept at "Yes", and the site admin has not disabled video uploads. Additionally, teachers can bulk upload video files from an SD card in "Bulk upload videos" under "Advanced options" in the Settings menu.
+<br />3) Record a new video directly using your device camera and upload it here.';
 $string['uploadyoutube'] = 'Link to Youtube Video';
 $string['uploadyoutube_help'] = 'For better performance, upload your video into your personal YouTube account or another video sharing site. Then copy the link and paste the link into the box for that link. When you link to a Youtube file, there is no thumbnail photo showing on the assessment screen. Just play the video and it will appear.';
 
@@ -391,11 +391,11 @@ $string['gradeitem:beforeclass'] = 'Class';
 
 $string['graded'] = 'Graded';
 $string['recordnewvideo'] = 'Record New Video';
-$string['recordnewvideo_help'] = 'Record a new video directly using your device camera for assessment.';
+$string['recordnewvideo_help'] = 'Select "Link to Youtube Video" to post a URL link to your video hosted on Youtube or other hosting service. Note: Youtube "Shorts" cannot be used. Select "Upload Video File" to upload a video file from your device. Select "Record New Video" to directly record a new video now using your device camera.';
 $string['recordradios'] = 'Record New Video';
 $string['recordradios_help'] = 'Record New Video is for directly recording a video for assessment.
 This function accesses the camera on your computer or mobile phone and starts a video recording.
-In contrast, the “Upload Video File” selection goes to the photo/video library of files to allow you to select a previously recorded video to upload.
+In contrast, the "Upload Video File" selection goes to the photo/video library of files to allow you to select a previously recorded video to upload.
 <br/>*Click the stop recording button, and then upload it automatically*';
 
 $string['calendardue'] = '{$a} is due';
@@ -436,7 +436,7 @@ Send an email to me if you have a question [[teacher email address]]
 Best regards,
 [[teacher name]]';
 $string['teachercomentnotificationlabel'] = 'Teacher Comment notification';
-$string['whentosendnotification'] = 'When to send notifiction';
+$string['whentosendnotification'] = 'When to send notification';
 $string['firstassessmentbyteacher'] = 'First assessment by teacher';
 $string['additionalassessmentbyteacher'] = 'Additional assessment by teacher';
 $string['whatinfomationtosend'] = 'What information to send';
@@ -563,13 +563,14 @@ $string['privacy:metadata:videoassessment_video_assocs:videoassessment'] = 'vide
 $string['privacy:metadata:videoassessment_video_assocs:videoid'] = 'Video storage ID.';
 $string['privacy:metadata:videoassessment_video_assocs:associationid'] = 'User who associate with this video.';
 $string['privacy:metadata:videoassessment_video_assocs:timemodified'] = 'Last modification time.';
-$string['defaultrubrictemplate'] = 'Default Video Assessment Rubric';
-$string['defaultrubrictemplatedesc'] = 'This is a default rubric template for video assessment. You can customize it to fit your needs.';
-$string['defaultcriterionvoice'] = 'Voice';
-$string['defaultcriteriongestures'] = 'Gestures';
-$string['defaultcriterioncontent'] = 'Content';
-$string['defaultcriterionvisuals'] = 'Visuals';
-$string['defaultcriterionoverall'] = 'Overall';
-$string['defaultvoice0'] = 'Can\'t be heard';
-$string['defaultvoice3'] = 'Can\'t be heard';
-$string['defaultvoice5'] = 'Good volume, intonation, stress on important words';
+
+$string['defaultrubrictemplate'] = 'Quick-start rubric for general performances (modifiable)';
+$string['defaultrubrictemplatedesc'] = 'This is a quick-start rubric template for general performances. You can customize it to fit your needs.';
+$string['defaultcriterioncontent'] = 'Interesting, engaging content';
+$string['defaultcriterionbodylanguage'] = 'Good body language, facial expression, eye contact';
+$string['defaultcriterionvoice'] = 'Clear voice with stress/intonation';
+$string['defaultcriterionlanguage'] = 'Easy-to-understand language';
+$string['defaultcriterionstructure'] = 'Strong introduction, transitions, conclusions';
+$string['gradingmethod_help'] = 'Choose the advanced grading method that should be used for calculating grades in the given context.
+
+To disable advanced grading and switch back to the default grading mechanism, choose \'Simple direct grading\'.';

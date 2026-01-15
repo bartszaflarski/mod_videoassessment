@@ -901,18 +901,17 @@ function videoassessment_cm_info_view(cm_info $cm) {
         $checkUrl = $CFG->wwwroot . '/mod/videoassessment/check_grading_redirect.php';
         $inlineJs = "
             (function() {
-                // Don't redirect if we're on the grading management page or activity page.
+                // Don't redirect if we're already on the grading management page.
                 var currentUrl = window.location.href;
-                if (currentUrl.indexOf('/grade/grading/manage.php') !== -1 ||
-                    currentUrl.indexOf('/mod/videoassessment/view.php') !== -1 ||
-                    currentUrl.indexOf('/course/view.php') === -1) {
-                    // Clear redirect flag when NOT on course page to prevent unwanted redirects.
+                if (currentUrl.indexOf('/grade/grading/manage.php') !== -1) {
+                    // Clear redirect flag when already on grading page.
                     sessionStorage.removeItem('videoassessment_check_grading_redirect');
                     return;
                 }
                 
-                // Only proceed if we're on the course page.
-                if (currentUrl.indexOf('/course/view.php') === -1) {
+                // Only proceed if we're on the course page or activity view page.
+                if (currentUrl.indexOf('/course/view.php') === -1 && 
+                    currentUrl.indexOf('/mod/videoassessment/view.php') === -1) {
                     return;
                 }
                 

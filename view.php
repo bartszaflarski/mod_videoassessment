@@ -156,16 +156,48 @@ if ($action == "") {
 $context = context_module::instance($cm->id);
 require_capability('mod/videoassessment:view', $context);
 
-// Clear any redirect flags when loading the activity page.
-// This prevents redirect loops when navigating back from the grading page.
-// The redirect should only happen from the course page via AJAX, not from the activity page itself.
+// Check if we need to redirect to grading page (from "Save and create rubric" button).
+// This must be checked BEFORE clearing the preference.
 global $CFG;
 $redirect_to_grading = get_user_preferences('videoassessment_redirect_to_grading');
 if (!empty($redirect_to_grading)) {
-    // Clear the preference to prevent redirect loops.
-    unset_user_preference('videoassessment_redirect_to_grading');
+    // Verify this is for the current activity instance.
+    $va = $DB->get_record('videoassessment', ['id' => $redirect_to_grading]);
+    if ($va && $va->id == $cm->instance) {
+        // Clear the preference immediately to prevent redirect loops.
+        unset_user_preference('videoassessment_redirect_to_grading');
+        
+        // Get or create the grading area and redirect.
+        require_once($CFG->dirroot . '/grade/grading/lib.php');
+        $gradingmanager = get_grading_manager($context, 'mod_videoassessment', 'beforeteacher');
+        
+        $arearecord = $DB->get_record('grading_areas', [
+            'contextid' => $context->id,
+            'component' => 'mod_videoassessment',
+            'areaname' => 'beforeteacher'
+        ]);
+        
+        if (!$arearecord) {
+            // Create the area.
+            $gradingmanager->set_active_method('rubric');
+            $arearecord = $DB->get_record('grading_areas', [
+                'contextid' => $context->id,
+                'component' => 'mod_videoassessment',
+                'areaname' => 'beforeteacher'
+            ]);
+        }
+        
+        if ($arearecord && $arearecord->id) {
+            // Redirect to grading page.
+            redirect(new moodle_url('/grade/grading/manage.php', ['areaid' => $arearecord->id]));
+        }
+    } else {
+        // Not for this activity, clear the preference.
+        unset_user_preference('videoassessment_redirect_to_grading');
+    }
 }
-// Also clear sessionStorage flag.
+
+// Clear sessionStorage flag if it exists (for cleanup).
 $PAGE->requires->js_amd_inline("
     require(['jquery'], function(\$) {
         sessionStorage.removeItem('videoassessment_check_grading_redirect');

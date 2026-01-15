@@ -263,7 +263,7 @@
 }
 
 /* Mobile responsive rubric - convert table columns to rows */
-@media (max-width: 768px) {
+@media (max-width: 768px) and (orientation: portrait) {
     /* Make the rubric container full width */
     .path-mod-videoassessment .gradingform_rubric,
     .gradingform_rubric {

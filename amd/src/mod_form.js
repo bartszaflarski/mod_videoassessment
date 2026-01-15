@@ -419,8 +419,9 @@ define(['jquery'], function ($) {
                 }
             });
             
-            // Add submitbutton for "Save and return to course" behavior.
-            // We'll handle the redirect via AJAX after the page loads.
+            // Add submitbutton for "Save and display" behavior (goes to activity view page).
+            // The redirect check will now work on the activity view page too.
+            // Remove any existing submitbutton hidden inputs.
             form.find('input[name="submitbutton"][type="hidden"]').remove();
             form.append('<input type="hidden" name="submitbutton" value="1">');
             

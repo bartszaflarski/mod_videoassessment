@@ -993,7 +993,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $o = '';
         $isexisting = !empty($cm);
 
-        // Get users with ONLY the student role (exclude teachers/managers).
+        // Get users with ONLY the student role (exclude teachers/managers) for the table rows.
         $students = $this->get_students_only($this->context);
 
         if (empty($students)) {
@@ -1002,7 +1002,16 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             return $o;
         }
 
-        // Build student data for JavaScript.
+        // Get only students (excluding teachers) for the dropdown options.
+        // Use core_user\fields to get all required name fields for fullname().
+        // Ensure 'id' is the first field (required for get_records_sql to work properly).
+        $namefieldsql = \core_user\fields::for_name()->get_sql('u', false, '', '', false);
+        // Prepend u.id to ensure it's first (get_records_sql uses first column as key).
+        $userfields = 'u.id, ' . $namefieldsql->selects;
+        // Get only students (same as $students but with all name fields).
+        $allusers = $this->get_students_only($this->context);
+
+        // Build student data for JavaScript (for table rows).
         $studentdata = [];
         foreach ($students as $student) {
             $studentdata[$student->id] = fullname($student);
@@ -1012,12 +1021,38 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $groups = groups_get_all_groups($COURSE->id);
         $groupdata = [];
         foreach ($groups as $group) {
-            // Get all members of each group (no role filtering for groups).
+            // Get only students from each group (filter out teachers).
             $groupmembers = [];
-            $members = groups_get_members($group->id, 'u.id');
-            foreach ($members as $member) {
-                $groupmembers[] = $member->id;
+            $namefieldsql = \core_user\fields::for_name()->get_sql('u', false, '', '', false);
+            $userfields = 'u.id, ' . $namefieldsql->selects;
+            $allmembers = groups_get_members($group->id, $userfields);
+            
+            // Filter to only include students (same logic as get_students_only).
+            $coursecontext = \context_course::instance($COURSE->id);
+            $studentrole = $DB->get_record('role', ['shortname' => 'student'], 'id');
+            if ($studentrole) {
+                $excluderoles = $DB->get_records_select('role',
+                    "shortname IN ('teacher', 'editingteacher', 'manager', 'coursecreator')",
+                    null, '', 'id');
+                $excluderoleids = array_keys($excluderoles);
+                
+                foreach ($allmembers as $member) {
+                    $hasstudentrole = user_has_role_assignment($member->id, $studentrole->id, $coursecontext->id);
+                    $hasexcludedrole = false;
+                    if (!empty($excluderoleids)) {
+                        foreach ($excluderoleids as $roleid) {
+                            if (user_has_role_assignment($member->id, $roleid, $coursecontext->id)) {
+                                $hasexcludedrole = true;
+                                break;
+                            }
+                        }
+                    }
+                    if ($hasstudentrole && !$hasexcludedrole) {
+                        $groupmembers[] = $member->id;
+                    }
+                }
             }
+            
             if (!empty($groupmembers)) {
                 $groupdata[$group->id] = [
                     'name' => $group->name,
@@ -1025,6 +1060,15 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 ];
             }
         }
+        
+        // Build allUsers data (only students, no teachers).
+        $allusersdata = [];
+        foreach ($allusers as $user) {
+            $allusersdata[$user->id] = fullname($user);
+        }
+        
+        // Use only students for table display.
+        $allusersfortable = $students;
 
         // Get existing peer assignments if editing.
         $existingpeers = [];
@@ -1091,7 +1135,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $o .= html_writer::end_tag('thead');
         $o .= html_writer::start_tag('tbody');
 
-        foreach ($students as $user) {
+        foreach ($allusersfortable as $user) {
             $userpeers = isset($existingpeers[$user->id]) ? $existingpeers[$user->id] : [];
 
             $o .= html_writer::start_tag('tr', ['data-userid' => $user->id]);
@@ -1104,15 +1148,18 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 'id' => 'assigned-peers-' . $user->id,
             ]);
 
-            // Show existing peers.
+            // Show existing peers (students only).
             foreach ($userpeers as $peerid) {
-                if (isset($studentdata[$peerid])) {
+                // Check studentdata for peer name.
+                $peername = isset($studentdata[$peerid]) ? $studentdata[$peerid] : null;
+                
+                if ($peername) {
                     $o .= html_writer::start_tag('span', [
                         'class' => 'peer-badge badge badge-secondary mr-1 mb-1',
                         'data-peerid' => $peerid,
                         'style' => 'display: inline-block; margin: 2px;',
                     ]);
-                    $o .= $studentdata[$peerid] . ' ';
+                    $o .= $peername . ' ';
                     $o .= html_writer::tag('a', '×', [
                         'href' => '#',
                         'class' => 'remove-peer text-white',
@@ -1126,13 +1173,15 @@ class mod_videoassessment_mod_form extends moodleform_mod {
 
             $o .= html_writer::end_tag('div');
 
-            // Add peer dropdown.
+            // Add peer dropdown - students only.
             $o .= html_writer::start_tag('select', [
                 'class' => 'form-control form-control-sm add-peer-select mt-1',
                 'data-userid' => $user->id,
                 'style' => 'width: auto; display: inline-block;',
             ]);
             $o .= html_writer::tag('option', get_string('addpeer', 'videoassessment'), ['value' => '']);
+            
+            // Add students only.
             foreach ($students as $candidate) {
                 if ($candidate->id != $user->id) {
                     $disabled = in_array($candidate->id, $userpeers) ? 'disabled' : '';
@@ -1142,6 +1191,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     ]);
                 }
             }
+            
             $o .= html_writer::end_tag('select');
 
             $o .= html_writer::end_tag('td');
@@ -1155,6 +1205,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         // Initialize JavaScript with student data, existing peers, and group data.
         $jsparams = [
             'students' => $studentdata,
+            'allUsers' => $allusersdata, // Only students, no teachers.
             'existingPeers' => $existingpeers,
             'isExisting' => $isexisting,
             'cmid' => $isexisting ? $cm->id : 0,
