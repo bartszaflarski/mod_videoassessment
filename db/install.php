@@ -41,7 +41,7 @@ require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
  */
 function create_default_rubric_template() {
     global $DB, $USER, $CFG;
-    
+
     // Ensure we have a valid user (required for rubric creation).
     if (empty($USER->id)) {
         $admin = get_admin();
@@ -52,12 +52,12 @@ function create_default_rubric_template() {
             return;
         }
     }
-    
+
     // Check if rubric tables exist.
     if (!$DB->get_manager()->table_exists('gradingform_rubric_criteria')) {
         return; // Rubric tables don't exist yet, skip template creation.
     }
-    
+
     try {
         // Check if template already exists by searching for it.
         // Shared templates are in system context with component 'core_grading'.
@@ -66,26 +66,26 @@ function create_default_rubric_template() {
             "SELECT ga.id, gd.id as definitionid
              FROM {grading_areas} ga
              JOIN {grading_definitions} gd ON gd.areaid = ga.id
-             WHERE ga.contextid = ? 
+             WHERE ga.contextid = ?
              AND ga.component = 'core_grading'
              AND gd.method = 'rubric'
              AND gd.name = ?",
             [$systemcontext->id, get_string('defaultrubrictemplate', 'videoassessment')]
         );
-        
+
         if (!empty($existingareas)) {
             return; // Template already exists.
         }
-        
+
         // Create a shared grading area for the template.
         // Shared templates use component 'core_grading' and are in system context.
         $manager = new \grading_manager();
         $areaid = $manager->create_shared_area('rubric');
-        
+
         // Get grading manager and controller for the new area.
         $manager = get_grading_manager($areaid);
         $controller = $manager->get_controller('rubric');
-        
+
         // Ensure we have a user context (required for rubric creation).
         if (empty($USER->id)) {
             // Use admin user if no user is set.
@@ -94,22 +94,22 @@ function create_default_rubric_template() {
                 $USER = $admin;
             }
         }
-        
+
         // Create a new definition structure from scratch.
         $definition = new \stdClass();
         $definition->name = 'Quick-start rubric for general performances (modifiable)';
         $definition->description_editor = [
             'text' => get_string('defaultrubrictemplatedesc', 'videoassessment'),
             'format' => FORMAT_HTML,
-            'itemid' => file_get_unused_draft_itemid()
+            'itemid' => file_get_unused_draft_itemid(),
         ];
-        
+
         // Define criteria and levels with proper NEWID structure.
         // Level IDs must match pattern /^NEWID\d+$/ (e.g., NEWID1, NEWID2, etc.)
         // Each criterion gets its own set of NEWID level keys (they're scoped per criterion).
         $criteria = [];
         $sortorder = 1;
-        
+
         // Criterion 1: Interesting, engaging content
         $criteria['NEWID1'] = [
             'sortorder' => $sortorder++,
@@ -121,9 +121,9 @@ function create_default_rubric_template() {
                 'NEWID3' => ['score' => 10, 'definition' => 'A little interesting', 'definitionformat' => FORMAT_MOODLE],
                 'NEWID4' => ['score' => 15, 'definition' => 'Interesting', 'definitionformat' => FORMAT_MOODLE],
                 'NEWID5' => ['score' => 20, 'definition' => 'Very interesting', 'definitionformat' => FORMAT_MOODLE],
-            ]
+            ],
         ];
-        
+
         // Criterion 2: Good body language, facial expression, eye contact
         $criteria['NEWID2'] = [
             'sortorder' => $sortorder++,
@@ -135,9 +135,9 @@ function create_default_rubric_template() {
                 'NEWID3' => ['score' => 10, 'definition' => 'Good', 'definitionformat' => FORMAT_MOODLE],
                 'NEWID4' => ['score' => 15, 'definition' => 'Very good', 'definitionformat' => FORMAT_MOODLE],
                 'NEWID5' => ['score' => 20, 'definition' => 'Excellent', 'definitionformat' => FORMAT_MOODLE],
-            ]
+            ],
         ];
-        
+
         // Criterion 3: Clear voice with stress/intonation
         $criteria['NEWID3'] = [
             'sortorder' => $sortorder++,
@@ -151,7 +151,7 @@ function create_default_rubric_template() {
                 'NEWID5' => ['score' => 20, 'definition' => 'Excellent voice with stress, intonation', 'definitionformat' => FORMAT_MOODLE],
             ]
         ];
-        
+
         // Criterion 4: Easy-to-understand language
         $criteria['NEWID4'] = [
             'sortorder' => $sortorder++,
@@ -165,7 +165,7 @@ function create_default_rubric_template() {
                 'NEWID5' => ['score' => 20, 'definition' => 'Very easy to understand', 'definitionformat' => FORMAT_MOODLE],
             ]
         ];
-        
+
         // Criterion 5: Strong introduction, transitions, conclusions
         $criteria['NEWID5'] = [
             'sortorder' => $sortorder++,
@@ -179,7 +179,7 @@ function create_default_rubric_template() {
                 'NEWID5' => ['score' => 20, 'definition' => 'Very strong introduction, transitions, conclusion', 'definitionformat' => FORMAT_MOODLE],
             ]
         ];
-        
+
         // Build the rubric definition structure.
         $definition->rubric = [
             'criteria' => $criteria,
@@ -196,7 +196,7 @@ function create_default_rubric_template() {
         ];
         $definition->saverubric = 'Save rubric and make it ready';
         $definition->status = \gradingform_controller::DEFINITION_STATUS_READY;
-        
+
         // Update the controller with the definition.
         // This will call update_or_check_rubric internally.
         // Suppress warnings about undefined array keys as this is a known Moodle core issue
@@ -207,7 +207,7 @@ function create_default_rubric_template() {
         } finally {
             error_reporting($olderrorlevel);
         }
-        
+
     } catch (Exception $e) {
         debugging('Failed to create default rubric template: ' . $e->getMessage(), DEBUG_NORMAL);
     }
@@ -223,7 +223,7 @@ function create_default_rubric_template() {
  */
 function xmldb_videoassessment_install() {
     global $OUTPUT, $CFG, $DB, $USER;
-    
+
     // Check ffmpeg
     $cmdline = '/usr/local/bin/ffmpeg -version';
     ignore_user_abort(true);
@@ -241,7 +241,7 @@ function xmldb_videoassessment_install() {
         $ffmpegversioninfo = $arr[0];
         echo $OUTPUT->notification($ffmpegversioninfo, 'notifysuccess');
     }
-    
+
     // Create default rubric template.
     // Note: This is called after all tables are installed, so rubric tables should exist.
     create_default_rubric_template();

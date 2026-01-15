@@ -128,7 +128,7 @@ class assess extends \moodleform {
 
         $grademenu = make_grades_menu($va->va->grade);
         $gradinginstances = $this->use_advanced_grading();
-        
+
         // Check if we have any advanced grading instances.
         // Even if $gradinginstances is set, it might be empty, so check for actual instances.
         $hasadvancedgrading = false;
@@ -146,7 +146,7 @@ class assess extends \moodleform {
             if (property_exists($this->_customdata, 'grade' . $timing)) {
                 $grade = $this->_customdata->{'grade' . $timing};
             }
-            
+
             // Use advanced grading if we have at least one instance.
             if ($hasadvancedgrading) {
                 // Grade type -rubric.
@@ -250,17 +250,17 @@ class assess extends \moodleform {
                 'context' => $coursecontext,
                 'subdirs' => true,
             );
-            
+
             $fieldname = 'submissioncomment' . $timing;
-            
+
             // Prepare editor data with file support if grade exists.
             if (isset($grade->submissioncomment) && isset($grade->id)) {
                 $editorvalue = new \stdClass();
                 $editorvalue->text = $grade->submissioncomment;
-                $editorvalue->textformat = isset($grade->submissioncommentformat) && $grade->submissioncommentformat > 0 
-                    ? $grade->submissioncommentformat 
+                $editorvalue->textformat = isset($grade->submissioncommentformat) && $grade->submissioncommentformat > 0
+                    ? $grade->submissioncommentformat
                     : FORMAT_HTML;
-                
+
                 // Prepare editor with file area support.
                 // file_prepare_standard_editor uses 'text' as the field name, so it creates 'text_editor' property.
                 $editorvalue = file_prepare_standard_editor(
@@ -272,7 +272,7 @@ class assess extends \moodleform {
                     'submissioncomment',
                     $grade->id
                 );
-                
+
                 $mform->addElement('editor', $fieldname, get_string('feedback', 'videoassessment') . ':',
                         array('cols' => 50, 'rows' => 8),
                         $editoroptions

@@ -170,13 +170,13 @@ if (!empty($sortitem)) {
     $sortby = 0;
 }
 
-$form = new assign_class(null, (object)array(
+$form = new assign_class(null, (object)[
     'va' => $va,
     'sortby' => $sortby,
     'students' => $students,
     'groups' => $groups,
     'groupid' => $groupid,
-));
+]);
 
 if ($data = $form->get_data()) {
 
@@ -185,7 +185,7 @@ if ($data = $form->get_data()) {
 
         $sortby = $data->sortby;
         $groupid = $data->groupid;
-        $orderidarr = optional_param_array('orderid', array(), PARAM_INT);
+        $orderidarr = optional_param_array('orderid', [], PARAM_INT);
 
         if (!empty($groupid)) {
             $type = 'group';

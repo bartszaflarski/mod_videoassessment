@@ -29,40 +29,40 @@ require_login();
 header('Content-Type: application/json');
 
 // Always clear the preference first to prevent redirect loops.
-$redirect_to_grading = get_user_preferences('videoassessment_redirect_to_grading');
+$redirecttograding = get_user_preferences('videoassessment_redirect_to_grading');
 unset_user_preference('videoassessment_redirect_to_grading');
 
-if (!empty($redirect_to_grading)) {
+if (!empty($redirecttograding)) {
     // Get the course module for this videoassessment instance.
-    $va = $DB->get_record('videoassessment', ['id' => $redirect_to_grading]);
+    $va = $DB->get_record('videoassessment', ['id' => $redirecttograding]);
     if ($va) {
         $cm = get_coursemodule_from_instance('videoassessment', $va->id, 0, false, MUST_EXIST);
         $context = context_module::instance($cm->id);
-        
+
         // Get or create the grading area.
         require_once($CFG->dirroot . '/grade/grading/lib.php');
         $gradingmanager = get_grading_manager($context, 'mod_videoassessment', 'beforeteacher');
-        
+
         $arearecord = $DB->get_record('grading_areas', [
             'contextid' => $context->id,
             'component' => 'mod_videoassessment',
-            'areaname' => 'beforeteacher'
+            'areaname' => 'beforeteacher',
         ]);
-        
+
         if (!$arearecord) {
             // Create the area.
             $gradingmanager->set_active_method('rubric');
             $arearecord = $DB->get_record('grading_areas', [
                 'contextid' => $context->id,
                 'component' => 'mod_videoassessment',
-                'areaname' => 'beforeteacher'
+                'areaname' => 'beforeteacher',
             ]);
         }
-        
+
         if ($arearecord && $arearecord->id) {
             echo json_encode([
                 'redirect' => true,
-                'url' => $CFG->wwwroot . '/grade/grading/manage.php?areaid=' . $arearecord->id
+                'url' => $CFG->wwwroot . '/grade/grading/manage.php?areaid=' . $arearecord->id,
             ]);
             exit;
         }

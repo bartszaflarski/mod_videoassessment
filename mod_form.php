@@ -240,7 +240,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                         var recordItem = document.getElementById("fitem_id_allowvideorecord");
                         if (uploadItem) uploadItem.style.opacity = "0.5";
                         if (recordItem) recordItem.style.opacity = "0.5";
-                        
+
                         // Also try by input name
                         var uploadInput = document.querySelector("input[name=\'allowvideoupload\']");
                         var recordInput = document.querySelector("input[name=\'allowvideorecord\']");
@@ -297,9 +297,9 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'submitbutton_rubric_btn',
             get_string('saveandcreaterubric', 'videoassessment'),
             [
-                'id' => 'id_submitbutton_rubric', 
+                'id' => 'id_submitbutton_rubric',
                 'type' => 'button',
-                'data-formchangechecker-ignore-submit' => '1'
+                'data-formchangechecker-ignore-submit' => '1',
             ],
             ['customclassoverride' => 'btn btn-primary']
         );
@@ -438,7 +438,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                         $this->current->_advancedgradingdata['methods']
                     );
                 $mform->addHelpButton('advancedgradingmethod_' . $firstareaname, 'advancedgradingmethodsgroup', 'videoassessment');
-                
+
                 // Set default grading method to 'rubric' if it's available.
                 if (isset($this->current->_advancedgradingdata['methods']['rubric'])) {
                     $mform->setDefault('advancedgradingmethod_' . $firstareaname, 'rubric');
@@ -622,8 +622,8 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $isteacher = $vaobj->is_teacher();
 
         if ($isteacher) {
-                // Bulk Upload Videos.
-                if (!va::uses_mobile_upload()) {
+            // Bulk Upload Videos.
+            if (!va::uses_mobile_upload()) {
                 $this->add_link_element(
                     'videoassessment:bulkupload',
                     new moodle_url('/mod/videoassessment/bulkupload/index.php', ['cmid' => $cm->id]),
@@ -631,27 +631,27 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 );
             }
 
-                // Bulk Video Deletion.
+            // Bulk Video Deletion.
             $this->add_link_element(
                 'deletevideos',
                 new moodle_url('/mod/videoassessment/deletevideos.php', ['id' => $cm->id]),
                 get_string('deletevideos', 'videoassessment'),
             );
 
-                // Associate.
+            // Associate.
             $this->add_link_element(
                 'associate',
                 new moodle_url($viewurl, ['action' => 'videos']),
                 get_string('associate', 'videoassessment'),
             );
 
-                // Publish Videos.
+            // Publish Videos.
             $this->add_link_element(
                 'publishvideos',
                 new moodle_url($viewurl, ['action' => 'publish']),
                 get_string('publishvideos', 'videoassessment'),
             );
-            }
+        }
         }
     }
 
@@ -1026,7 +1026,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             $namefieldsql = \core_user\fields::for_name()->get_sql('u', false, '', '', false);
             $userfields = 'u.id, ' . $namefieldsql->selects;
             $allmembers = groups_get_members($group->id, $userfields);
-            
+
             // Filter to only include students (same logic as get_students_only).
             $coursecontext = \context_course::instance($COURSE->id);
             $studentrole = $DB->get_record('role', ['shortname' => 'student'], 'id');
@@ -1035,7 +1035,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     "shortname IN ('teacher', 'editingteacher', 'manager', 'coursecreator')",
                     null, '', 'id');
                 $excluderoleids = array_keys($excluderoles);
-                
+
                 foreach ($allmembers as $member) {
                     $hasstudentrole = user_has_role_assignment($member->id, $studentrole->id, $coursecontext->id);
                     $hasexcludedrole = false;
@@ -1052,7 +1052,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     }
                 }
             }
-            
+
             if (!empty($groupmembers)) {
                 $groupdata[$group->id] = [
                     'name' => $group->name,
@@ -1060,13 +1060,13 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 ];
             }
         }
-        
+
         // Build allUsers data (only students, no teachers).
         $allusersdata = [];
         foreach ($allusers as $user) {
             $allusersdata[$user->id] = fullname($user);
         }
-        
+
         // Use only students for table display.
         $allusersfortable = $students;
 
@@ -1152,7 +1152,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             foreach ($userpeers as $peerid) {
                 // Check studentdata for peer name.
                 $peername = isset($studentdata[$peerid]) ? $studentdata[$peerid] : null;
-                
+
                 if ($peername) {
                     $o .= html_writer::start_tag('span', [
                         'class' => 'peer-badge badge badge-secondary mr-1 mb-1',
@@ -1180,7 +1180,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 'style' => 'width: auto; display: inline-block;',
             ]);
             $o .= html_writer::tag('option', get_string('addpeer', 'videoassessment'), ['value' => '']);
-            
+
             // Add students only.
             foreach ($students as $candidate) {
                 if ($candidate->id != $user->id) {
@@ -1191,7 +1191,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     ]);
                 }
             }
-            
+
             $o .= html_writer::end_tag('select');
 
             $o .= html_writer::end_tag('td');
@@ -1318,15 +1318,15 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         // Set default to 'rubric' for new instances or when rubric definition exists.
         if (!empty($this->current->_advancedgradingdata['areas'])) {
             $areas = array_keys($this->current->_advancedgradingdata['areas']);
-            
+
             foreach ($areas as $areaname) {
                 $fieldname = 'advancedgradingmethod_' . $areaname;
-                
+
                 // Only set default if field exists.
                 if ($mform->elementExists($fieldname)) {
                     $currentvalue = $mform->getElementValue($fieldname);
                     $isempty = empty($currentvalue) || (is_array($currentvalue) && empty($currentvalue[0]));
-                    
+
                     // Check if a rubric definition exists for this area.
                     $hasrubricdefinition = false;
                     global $CFG;
@@ -1355,9 +1355,10 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                             }
                         } catch (Exception $e) {
                             // Ignore errors, just continue.
+                            debugging('Error in peer assignment: ' . $e->getMessage(), DEBUG_NORMAL);
                         }
                     }
-                    
+
                     // Set to 'rubric' if empty and rubric is available, or if rubric definition exists.
                     if (isset($this->current->_advancedgradingdata['methods']['rubric'])) {
                         if ($isempty || $hasrubricdefinition) {

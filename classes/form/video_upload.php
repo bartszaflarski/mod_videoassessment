@@ -166,7 +166,7 @@ class video_upload extends \moodleform {
             $PAGE->requires->js('/mod/videoassessment/DetectRTC.js');
             $PAGE->requires->js_call_amd('mod_videoassessment/record', 'reCord', []);
         }
-        
+
         // Set default upload type - must be after all radio buttons are added.
         $mform->setDefault('upload', $defaultuploadtype);
 

@@ -95,11 +95,11 @@ function videoassessment_add_instance($va, $form) {
 
     // Check if "Save and create rubric" button was clicked.
     // Check both the form data and $_POST since submit button values may not be in $va.
-    $rubricbuttonclicked = !empty($va->redirect_to_rubric) || 
-                           !empty($va->submitbutton_rubric) || 
+    $rubricbuttonclicked = !empty($va->redirect_to_rubric) ||
+                           !empty($va->submitbutton_rubric) ||
                            isset($_POST['submitbutton_rubric']) ||
                            (isset($_POST['redirect_to_rubric']) && $_POST['redirect_to_rubric'] == '1');
-    
+
     if ($rubricbuttonclicked) {
         // Use user preference instead of session to avoid "session mutated after closed" error.
         set_user_preference('videoassessment_redirect_to_grading', $va->id);
@@ -171,11 +171,11 @@ function videoassessment_update_instance($va, $form) {
         require_once($CFG->dirroot . '/grade/grading/lib.php');
         $gradingman = get_grading_manager($cm->context, 'mod_videoassessment');
         $areas = $gradingman->get_available_areas();
-        
+
         foreach ($areas as $areaname => $areatitle) {
             $formfield = 'advancedgradingmethod_' . $areaname;
             $gradingman->set_area($areaname);
-            
+
             // If method is not set but a rubric definition exists, set it to 'rubric'.
             if (empty($va->$formfield)) {
                 $controller = $gradingman->get_controller('rubric');
@@ -238,8 +238,8 @@ function videoassessment_update_instance($va, $form) {
     }
 
     // Check if "Save and create rubric" button was clicked.
-    $rubricbuttonclicked = !empty($va->redirect_to_rubric) || 
-                           !empty($va->submitbutton_rubric) || 
+    $rubricbuttonclicked = !empty($va->redirect_to_rubric) ||
+                           !empty($va->submitbutton_rubric) ||
                            isset($_POST['submitbutton_rubric']) ||
                            (isset($_POST['redirect_to_rubric']) && $_POST['redirect_to_rubric'] == '1');
     if ($rubricbuttonclicked) {
@@ -650,23 +650,23 @@ function videoassessment_update_calendar($va) {
  */
 function videoassessment_auto_duplicate_rubric($contextid) {
     global $DB, $CFG;
-    
+
     require_once($CFG->dirroot . '/grade/grading/lib.php');
     require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
-    
+
     // Get all grading areas for this context.
     $allareas = $DB->get_records('grading_areas', ['contextid' => $contextid, 'component' => 'mod_videoassessment']);
-    
+
     // Find any area that has a rubric definition (prefer teacher, but use any that exists).
     $sourcearea = null;
     $sourcedefinition = null;
-    
+
     // First, try to find teacher area with rubric.
     foreach ($allareas as $area) {
         if ($area->areaname == 'beforeteacher') {
             $definition = $DB->get_record('grading_definitions', [
                 'areaid' => $area->id,
-                'method' => 'rubric'
+                'method' => 'rubric',
             ]);
             if ($definition && $definition->status == gradingform_controller::DEFINITION_STATUS_READY) {
                 $sourcearea = $area;
@@ -675,13 +675,13 @@ function videoassessment_auto_duplicate_rubric($contextid) {
             }
         }
     }
-    
+
     // If no teacher rubric found, check any other area that has a rubric.
     if (!$sourcearea) {
         foreach ($allareas as $area) {
             $definition = $DB->get_record('grading_definitions', [
                 'areaid' => $area->id,
-                'method' => 'rubric'
+                'method' => 'rubric',
             ]);
             if ($definition && $definition->status == gradingform_controller::DEFINITION_STATUS_READY) {
                 $sourcearea = $area;
@@ -690,34 +690,34 @@ function videoassessment_auto_duplicate_rubric($contextid) {
             }
         }
     }
-    
+
     if (!$sourcearea || !$sourcedefinition) {
         return; // No rubric found in any area.
     }
-    
+
     // Get video assessment instance to check which areas are enabled.
     $context = context::instance_by_id($contextid);
     if ($context->contextlevel != CONTEXT_MODULE) {
         return; // Not a module context.
     }
-    
+
     $cm = get_coursemodule_from_id('videoassessment', $context->instanceid, 0, false, IGNORE_MISSING);
     if (!$cm) {
         return; // Cannot find course module.
     }
-    
+
     $va = $DB->get_record('videoassessment', ['id' => $cm->instance]);
     if (!$va) {
         return;
     }
-    
+
     // Determine which areas need rubrics based on settings.
-    $areas_to_duplicate = [];
+    $areastoduplicate = [];
     foreach ($allareas as $area) {
         if ($area->id == $sourcearea->id) {
             continue; // Skip the source area (wherever the rubric came from).
         }
-        
+
         // Check if this area should have a rubric based on settings.
         $needsrubric = false;
         if ($area->areaname == 'beforeteacher' && !empty($va->ratingteacher)) {
@@ -729,34 +729,34 @@ function videoassessment_auto_duplicate_rubric($contextid) {
         } else if ($area->areaname == 'beforeclass' && !empty($va->ratingclass)) {
             $needsrubric = true;
         }
-        
+
         if ($needsrubric) {
             // Always add to duplication list, even if rubric exists.
             // This ensures that when a template is selected for one area, it updates all areas.
-            $areas_to_duplicate[] = $area;
+            $areastoduplicate[] = $area;
         }
     }
-    
-    if (empty($areas_to_duplicate)) {
+
+    if (empty($areastoduplicate)) {
         return; // All areas already have rubrics.
     }
-    
+
     // Duplicate the rubric to each area that needs it.
     $transaction = $DB->start_delegated_transaction();
-    
+
     try {
-        foreach ($areas_to_duplicate as $targetarea) {
+        foreach ($areastoduplicate as $targetarea) {
             // Set the active method to 'rubric' for this area BEFORE creating the definition.
             // Use context/component/area approach to get the manager.
             $targetmanager = get_grading_manager($context, 'mod_videoassessment', $targetarea->areaname);
             $targetmanager->set_active_method('rubric');
-            
+
             // Check if this area already has a rubric definition - if so, delete it first.
             $existingdefinition = $DB->get_record('grading_definitions', [
                 'areaid' => $targetarea->id,
-                'method' => 'rubric'
+                'method' => 'rubric',
             ]);
-            
+
             if ($existingdefinition) {
                 // Delete existing criteria and levels first.
                 $existingcriteria = $DB->get_records('gradingform_rubric_criteria', ['definitionid' => $existingdefinition->id]);
@@ -766,16 +766,16 @@ function videoassessment_auto_duplicate_rubric($contextid) {
                 $DB->delete_records('gradingform_rubric_criteria', ['definitionid' => $existingdefinition->id]);
                 $DB->delete_records('grading_definitions', ['id' => $existingdefinition->id]);
             }
-            
+
             // Clone the definition from source area.
             $newdefinition = clone $sourcedefinition;
             unset($newdefinition->id);
             $newdefinition->areaid = $targetarea->id;
             $newdefinition->timecreated = time();
             $newdefinition->timemodified = time();
-            
+
             $newdefinitionid = $DB->insert_record('grading_definitions', $newdefinition);
-            
+
             // Copy criteria from source area.
             $criteria = $DB->get_records('gradingform_rubric_criteria', ['definitionid' => $sourcedefinition->id], 'sortorder ASC');
             foreach ($criteria as $criterion) {
@@ -786,7 +786,7 @@ function videoassessment_auto_duplicate_rubric($contextid) {
                 $newcriterion->description = $criterion->description;
                 $newcriterion->descriptionformat = $criterion->descriptionformat;
                 $newcriterionid = $DB->insert_record('gradingform_rubric_criteria', $newcriterion);
-                
+
                 // Copy levels for this criterion.
                 $levels = $DB->get_records('gradingform_rubric_levels', ['criterionid' => $criterion->id], 'score ASC');
                 foreach ($levels as $level) {
@@ -800,7 +800,7 @@ function videoassessment_auto_duplicate_rubric($contextid) {
                 }
             }
         }
-        
+
         $transaction->allow_commit();
     } catch (Exception $e) {
         $transaction->rollback($e);
@@ -808,6 +808,12 @@ function videoassessment_auto_duplicate_rubric($contextid) {
     }
 }
 
+/**
+ * Extend settings navigation.
+ *
+ * @param object $settings
+ * @param navigation_node $videoassessmentnode
+ */
 function videoassessment_extend_settings_navigation($settings, navigation_node $videoassessmentnode) {
     global $PAGE;
     $areaname = '';
@@ -816,7 +822,7 @@ function videoassessment_extend_settings_navigation($settings, navigation_node $
     }
     $hasgrade = videoassessment_check_has_grade($PAGE->cm->instance);
     $areas = videoassessment_get_areas($PAGE->cm->context->id);
-    
+
     // Auto-duplicate rubric if teacher rubric exists but peer/self/class don't.
     // Check on grading management pages and after template selection.
     if (strpos($PAGE->url->get_path(), '/grade/grading/manage.php') !== false ||
@@ -842,17 +848,17 @@ function videoassessment_extend_settings_navigation($settings, navigation_node $
         }
     }
     $checkgradehtml .= "</div>";
-    
+
     // Add to page footer via JavaScript to ensure it's output after DOCTYPE.
     $PAGE->requires->js_amd_inline("
         require(['jquery'], function(\$) {
             \$('body').append(" . json_encode($checkgradehtml) . ");
         });
     ");
-    
+
     $PAGE->requires->jquery();
     $PAGE->requires->js_call_amd('mod_videoassessment/grademanage', 'init_grademanage', array());
-    
+
     // Always check if we're on the grading management page and change heading if needed.
     // This works even if this function is called from other contexts.
     $PAGE->requires->js_call_amd('mod_videoassessment/grading_heading', 'init');
@@ -880,7 +886,7 @@ function mod_videoassessment_get_fontawesome_icon_map() {
 
 /**
  * Add page requirements for videoassessment module.
- * 
+ *
  * This function is called for course pages and allows us to inject
  * JavaScript that checks for pending grading redirects.
  *
@@ -889,17 +895,17 @@ function mod_videoassessment_get_fontawesome_icon_map() {
  */
 function videoassessment_cm_info_view(cm_info $cm) {
     global $PAGE, $CFG;
-    
+
     // Check if there's a pending redirect to grading page.
     // This handles the case where "Save and create rubric" was clicked.
-    static $redirectChecked = false;
-    if (!$redirectChecked) {
-        $redirectChecked = true;
-        
+    static $redirectchecked = false;
+    if (!$redirectchecked) {
+        $redirectchecked = true;
+
         // Add inline JavaScript to check sessionStorage and redirect if needed.
         // Uses a unique token to ensure the redirect only happens once.
-        $checkUrl = $CFG->wwwroot . '/mod/videoassessment/check_grading_redirect.php';
-        $inlineJs = "
+        $checkurl = $CFG->wwwroot . '/mod/videoassessment/check_grading_redirect.php';
+        $inlinejs = "
             (function() {
                 // Don't redirect if we're already on the grading management page.
                 var currentUrl = window.location.href;
@@ -908,25 +914,25 @@ function videoassessment_cm_info_view(cm_info $cm) {
                     sessionStorage.removeItem('videoassessment_check_grading_redirect');
                     return;
                 }
-                
+
                 // Only proceed if we're on the course page or activity view page.
-                if (currentUrl.indexOf('/course/view.php') === -1 && 
+                if (currentUrl.indexOf('/course/view.php') === -1 &&
                     currentUrl.indexOf('/mod/videoassessment/view.php') === -1) {
                     return;
                 }
-                
+
                 var redirectData = sessionStorage.getItem('videoassessment_check_grading_redirect');
-                
+
                 // Only proceed if we have the sessionStorage flag.
                 if (!redirectData) {
                     return;
                 }
-                
+
                 // Parse the data: 'timestamp:token'
                 var parts = redirectData.split(':');
                 var storedTime = parseInt(parts[0], 10);
                 var token = parts[1] || '';
-                
+
                 // Check if this token was already processed.
                 var processedTokens = JSON.parse(sessionStorage.getItem('videoassessment_processed_tokens') || '[]');
                 if (processedTokens.indexOf(token) !== -1) {
@@ -934,18 +940,18 @@ function videoassessment_cm_info_view(cm_info $cm) {
                     sessionStorage.removeItem('videoassessment_check_grading_redirect');
                     return;
                 }
-                
+
                 // Remove the redirect flag immediately to prevent re-triggering.
                 sessionStorage.removeItem('videoassessment_check_grading_redirect');
-                
+
                 var now = Date.now();
-                
+
                 // Only proceed if the redirect was set less than 2 seconds ago.
                 // Very short time window to prevent redirects when navigating away.
                 if (now - storedTime > 2000) {
                     return;
                 }
-                
+
                 // Mark this token as processed immediately.
                 processedTokens.push(token);
                 // Keep only last 10 tokens to prevent storage bloat.
@@ -953,9 +959,9 @@ function videoassessment_cm_info_view(cm_info $cm) {
                     processedTokens = processedTokens.slice(-10);
                 }
                 sessionStorage.setItem('videoassessment_processed_tokens', JSON.stringify(processedTokens));
-                
+
                 // Check for redirect via AJAX.
-                fetch('{$checkUrl}', {credentials: 'same-origin'})
+                fetch('{$checkurl}', {credentials: 'same-origin'})
                     .then(function(response) { return response.json(); })
                     .then(function(data) {
                         if (data.redirect && data.url) {
@@ -967,7 +973,7 @@ function videoassessment_cm_info_view(cm_info $cm) {
                     });
             })();
         ";
-        $PAGE->requires->js_init_code($inlineJs, false);
+        $PAGE->requires->js_init_code($inlinejs, false);
     }
 }
 

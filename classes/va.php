@@ -1239,7 +1239,7 @@ class va {
 
         // Always filter out teachers for both course-wide and group assignments.
         $coursecontext = \context_course::instance($this->course->id);
-        
+
         // Get the student role ID.
         $studentrole = $DB->get_record('role', ['shortname' => 'student'], 'id');
         if (!$studentrole) {
@@ -1255,13 +1255,13 @@ class va {
         foreach ($groupids as $groupid) {
             // Always filter teachers: use get_enrolled_users with capability check, then filter by role.
             $users = get_enrolled_users($this->context, 'mod/videoassessment:submit', $groupid, 'u.id');
-            
+
             // Filter out teachers for both course-wide and group assignments.
             $userids = array();
             foreach ($users as $user) {
                 // Check if user has student role.
                 $hasstudentrole = user_has_role_assignment($user->id, $studentrole->id, $coursecontext->id);
-                
+
                 // Check if user has any excluded role.
                 $hasexcludedrole = false;
                 if (!empty($excluderoleids)) {
@@ -1272,13 +1272,13 @@ class va {
                         }
                     }
                 }
-                
+
                 // Only include users with student role and without excluded roles.
                 if ($hasstudentrole && !$hasexcludedrole) {
                     $userids[] = $user->id;
                 }
             }
-            
+
             // Skip if no users found.
             if (empty($userids)) {
                 continue;
@@ -1491,12 +1491,12 @@ class va {
 
         $PAGE->requires->js_call_amd('mod_videoassessment/module', 'mainInit', array($this->cm->id));
         $PAGE->requires->js_call_amd('mod_videoassessment/module', 'assessInit');
-        
+
         // Add inline script with immediate functionality for remark textarea hide/show
         $PAGE->requires->js_amd_inline("
             require(['jquery'], function(\$) {
                 console.log('[VideoAssessment] Inline script loaded');
-                
+
                 // Mobile detection function
                 function isMobile() {
                     var width = window.innerWidth;
@@ -1507,12 +1507,12 @@ class va {
                     }
                     return width <= 768 && isPortrait;
                 }
-                
+
                 // Get video container
                 function getVideoContainer() {
                     return \$('.assess-form-videos, .path-mod-videoassessment .assess-form-videos');
                 }
-                
+
                 // Hide/show video functions with animation
                 function hideVideo() {
                     if (isMobile()) {
@@ -1523,7 +1523,7 @@ class va {
                         }
                     }
                 }
-                
+
                 function showVideo() {
                     if (isMobile()) {
                         var \$container = getVideoContainer();
@@ -1532,15 +1532,15 @@ class va {
                         }
                     }
                 }
-                
+
                 // Setup handlers for remark textareas
                 function setupRemarkHandlers() {
                     console.log('[VideoAssessment] Setting up remark handlers...');
-                    
+
                     // Find remark textareas
                     var \$remarkTextareas = \$('.remark textarea, td.remark textarea, .criterion .remark textarea, .gradingform_rubric .remark textarea');
                     console.log('[VideoAssessment] Found remark textareas:', \$remarkTextareas.length);
-                    
+
                     // Handle focus/blur
                     \$remarkTextareas.off('focus.videoassessment-remark blur.videoassessment-remark')
                         .on('focus.videoassessment-remark', function() {
@@ -1556,22 +1556,22 @@ class va {
                                 }
                             }, 150);
                         });
-                    
+
                     // Catch-all click handler
                     \$(document).on('click.videoassessment-remark-all', function(e) {
                         var \$target = \$(e.target);
-                        var isRemark = \$target.closest('.remark').length > 0 || 
+                        var isRemark = \$target.closest('.remark').length > 0 ||
                                        \$target.is('.remark') ||
                                        \$target.closest('.remark textarea').length > 0 ||
                                        \$target.is('.remark textarea');
-                        
+
                         if (isRemark && isMobile()) {
                             console.log('[VideoAssessment] Clicked in remark area');
                             hideVideo();
                         }
                     });
                 }
-                
+
                 // Setup immediately and after delays
                 setTimeout(setupRemarkHandlers, 100);
                 setTimeout(setupRemarkHandlers, 500);
@@ -1579,7 +1579,7 @@ class va {
                 setTimeout(setupRemarkHandlers, 3000);
             });
         ");
-        
+
         $PAGE->requires->js_call_amd('mod_videoassessment/assess', 'videoassessmentAssess', array());
         $o = '';
 
@@ -1687,33 +1687,33 @@ class va {
         if ($this->get_associated_video($user->id, 'after')) {
             $gradingareas[] = 'after' . $gradertype;
         }
-        
+
         // Auto-duplicate rubric if teacher has one but this grader type doesn't.
         // This ensures peers can always see the rubric.
         videoassessment_auto_duplicate_rubric($this->context->id);
-        
+
         $rubric = new rubric($this, $gradingareas);
 
         foreach ($this->timings as $timing) {
             $gradingarea = $timing . $gradertype;
             $itemid = null;
             $itemid = $this->get_grade_item($gradingarea, $user->id);
-            
+
             // Try to get the controller - this will auto-duplicate if needed.
             $controller = $rubric->get_available_controller($gradingarea);
-            
+
             // If controller still not available, try one more time after ensuring duplication.
             if (!$controller) {
                 // Force duplication check again.
                 videoassessment_auto_duplicate_rubric($this->context->id);
-                
+
                 // Reload the rubric object to pick up newly duplicated rubrics.
                 $rubric = new rubric($this, $gradingareas);
-                
+
                 // Try again to get the controller.
                 $controller = $rubric->get_available_controller($gradingarea);
             }
-            
+
             if ($controller) {
                 $instanceid = optional_param('advancedgradinginstanceid', 0, PARAM_INT);
                 if (!isset($mformdata->advancedgradinginstance)) {
@@ -1754,8 +1754,9 @@ class va {
                     }
                 } catch (Exception $e) {
                     // No rubric available.
+                    debugging('Error checking rubric definition: ' . $e->getMessage(), DEBUG_NORMAL);
                 }
-                
+
                 if (!$hasdefinition) {
                     // Debug: Log why controller is not available with more details.
                     $manager = get_grading_manager($this->context, 'mod_videoassessment', $gradingarea);
@@ -1786,7 +1787,7 @@ class va {
         if (!isset($mformdata->advancedgradinginstance)) {
             $mformdata->advancedgradinginstance = new \stdClass();
         }
-        
+
         $form = new form\assess('', $mformdata, 'post', '', array(
             'class' => 'gradingform',
         ));
@@ -1805,14 +1806,14 @@ class va {
                 }
             }
             $gradertype = $this->get_grader_type($data->userid, $gradertype);
-            
+
             // Determine notify student value and save teacher's preference for subsequent gradings.
             $notifystudent = empty($data->isnotifystudent) ? 0 : $data->isnotifystudent;
             global $USER;
             if ($gradertype == 'teacher') {
                 set_user_preference('videoassessment_notify_student_default', $notifystudent);
             }
-            
+
             foreach ($this->timings as $timing) {
                 $gradingarea = $timing . $gradertype;
                 $itemid = $this->get_grade_item($gradingarea, $data->userid);
@@ -1835,11 +1836,11 @@ class va {
                 $grade->grade = $data->{'xgrade' . $timing};
                 if (isset($data->{'submissioncomment' . $timing})) {
                     $editorvalue = $data->{'submissioncomment' . $timing};
-                    
+
                     // Get maxbytes setting.
                     global $CFG;
                     $maxbytes = get_user_max_upload_file_size($this->context, $CFG->maxbytes, $this->course->maxbytes);
-                    
+
                     // Editor options for file handling.
                     $editoroptions = array(
                         'maxfiles' => EDITOR_UNLIMITED_FILES,
@@ -1848,13 +1849,13 @@ class va {
                         'context' => $this->context,
                         'subdirs' => true,
                     );
-                    
+
                     // Prepare object for file_postupdate_standard_editor.
                     // It expects an object with 'text' property and 'text_editor' property containing the editor data.
                     $editorobj = new \stdClass();
                     $editorobj->text = isset($editorvalue['text']) ? $editorvalue['text'] : '';
                     $editorobj->text_editor = $editorvalue; // The editor data array.
-                    
+
                     $editorobj = file_postupdate_standard_editor(
                         $editorobj,
                         'text',
@@ -1864,7 +1865,7 @@ class va {
                         'submissioncomment',
                         $grade->id
                     );
-                    
+
                     $grade->submissioncomment = $editorobj->text;
                     $grade->submissioncommentformat = isset($editorobj->textformat) ? $editorobj->textformat : FORMAT_HTML;
                 }
@@ -2869,13 +2870,13 @@ class va {
      */
     public function get_random_peers_for_users(array $userids, $numpeers) {
         assert(is_numeric($numpeers));
-        
+
         // Initialize peers array for all users.
         $peers = array();
         foreach ($userids as $userid) {
             $peers[$userid] = array();
         }
-        
+
         // Handle unlimited peers case (-1 means all other users).
         if ($numpeers == -1) {
             foreach ($userids as $userid) {
@@ -2884,7 +2885,7 @@ class va {
             }
             return $peers;
         }
-        
+
         // Check if we have enough users. Need at least numpeers + 1 users.
         if (count($userids) <= $numpeers) {
             // Not enough users - assign as many peers as possible.
@@ -2893,13 +2894,13 @@ class va {
             }
             return $peers;
         }
-        
+
         // Simple, reliable algorithm: assign peers round by round.
         // Shuffle user list for randomness.
         $shuffled = $userids;
         shuffle($shuffled);
         $numusers = count($shuffled);
-        
+
         // For each round (peer slot 0 to numpeers-1), assign one peer to each user.
         for ($round = 0; $round < $numpeers; $round++) {
             // Create a list of users that still need peers in this round.
@@ -2909,16 +2910,16 @@ class va {
                     $usersneedingpeers[] = $userid;
                 }
             }
-            
+
             // Shuffle the list for randomness.
             shuffle($usersneedingpeers);
-            
+
             // For each user needing a peer, assign one.
             foreach ($usersneedingpeers as $userid) {
                 // Get all potential peers (all other users).
                 $potentialpeers = array_values(array_diff($shuffled, array($userid)));
                 shuffle($potentialpeers);
-                
+
                 // Find the first peer that:
                 // 1. Is not the user themselves
                 // 2. Hasn't been assigned to this user yet
@@ -2931,14 +2932,14 @@ class va {
                         break;
                     }
                 }
-                
+
                 // If we couldn't assign (shouldn't happen), log a warning.
                 if (!$assigned) {
                     debugging("Could not assign peer to user $userid in round $round. Current peers: " . implode(',', $peers[$userid]), DEBUG_NORMAL);
                 }
             }
         }
-        
+
         // Final verification: ensure everyone has the required number of peers.
         // This handles edge cases where the algorithm above didn't assign enough.
         foreach ($userids as $userid) {
@@ -2947,7 +2948,7 @@ class va {
                 // Get all other users as potential peers.
                 $remaining = array_values(array_diff($userids, array($userid)));
                 shuffle($remaining);
-                
+
                 foreach ($remaining as $peerid) {
                     if (!in_array($peerid, $peers[$userid])) {
                         $peers[$userid][] = $peerid;
@@ -2962,7 +2963,7 @@ class va {
                 }
             }
         }
-        
+
         return $peers;
     }
 

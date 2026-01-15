@@ -159,34 +159,34 @@ require_capability('mod/videoassessment:view', $context);
 // Check if we need to redirect to grading page (from "Save and create rubric" button).
 // This must be checked BEFORE clearing the preference.
 global $CFG;
-$redirect_to_grading = get_user_preferences('videoassessment_redirect_to_grading');
-if (!empty($redirect_to_grading)) {
+$redirecttograding = get_user_preferences('videoassessment_redirect_to_grading');
+if (!empty($redirecttograding)) {
     // Verify this is for the current activity instance.
-    $va = $DB->get_record('videoassessment', ['id' => $redirect_to_grading]);
+    $va = $DB->get_record('videoassessment', ['id' => $redirecttograding]);
     if ($va && $va->id == $cm->instance) {
         // Clear the preference immediately to prevent redirect loops.
         unset_user_preference('videoassessment_redirect_to_grading');
-        
+
         // Get or create the grading area and redirect.
         require_once($CFG->dirroot . '/grade/grading/lib.php');
         $gradingmanager = get_grading_manager($context, 'mod_videoassessment', 'beforeteacher');
-        
+
         $arearecord = $DB->get_record('grading_areas', [
             'contextid' => $context->id,
             'component' => 'mod_videoassessment',
-            'areaname' => 'beforeteacher'
+            'areaname' => 'beforeteacher',
         ]);
-        
+
         if (!$arearecord) {
             // Create the area.
             $gradingmanager->set_active_method('rubric');
             $arearecord = $DB->get_record('grading_areas', [
                 'contextid' => $context->id,
                 'component' => 'mod_videoassessment',
-                'areaname' => 'beforeteacher'
+                'areaname' => 'beforeteacher',
             ]);
         }
-        
+
         if ($arearecord && $arearecord->id) {
             // Redirect to grading page.
             redirect(new moodle_url('/grade/grading/manage.php', ['areaid' => $arearecord->id]));
