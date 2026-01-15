@@ -6,7 +6,7 @@ Requirements
 
 * Moodle 4.0 to 4.3
 * ffmpeg
-* MP4Box
+* MP4Box (Optional - Legacy)
 
 Optional parameter adjustment
 -----------------------------
