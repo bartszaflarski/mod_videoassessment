@@ -36,20 +36,21 @@ $groupid = optional_param('groupid', 0, PARAM_INT);
 $cm = get_coursemodule_from_id('videoassessment', $cmid, 0, false, MUST_EXIST);
 require_login($cm->course, true, $cm);
 
-if (optional_param('sort', null, PARAM_INT) !== null && optional_param('id', null, PARAM_INT) !== null && optional_param('groupid', null, PARAM_INT) !== null) {
+if (optional_param('sort', null, PARAM_INT) !== null
+    && optional_param('id', null, PARAM_INT) !== null
+    && optional_param('groupid', null, PARAM_INT) !== null) {
     $sort = required_param('sort', PARAM_INT);
     $groupid = required_param('groupid', PARAM_INT);
     $id = required_param('id', PARAM_INT);
 
     $cm = get_coursemodule_from_id('videoassessment', $id, 0, false, MUST_EXIST);
 
-    $course = $DB->get_record('course', array('id' => $cm->course));
+    $course = $DB->get_record('course', ['id' => $cm->course]);
     $context = \context_module::instance($cm->id);
     require_capability('mod/videoassessment:managesorting', $context);
     $va = new \mod_videoassessment\va($context, $cm, $course);
 
     if ($sort == assign_class::SORT_MANUALLY) {
-
         try {
             $transaction = $DB->start_delegated_transaction();
 
@@ -63,7 +64,7 @@ if (optional_param('sort', null, PARAM_INT) !== null && optional_param('id', nul
                 $itemid = $cm->course;
             }
 
-            $sortitem = $DB->get_record('videoassessment_sort_items', array('type' => $type, 'itemid' => $itemid));
+            $sortitem = $DB->get_record('videoassessment_sort_items', ['type' => $type, 'itemid' => $itemid]);
 
             if (!$sortitem) {
                 $object = new \stdClass();
@@ -78,7 +79,6 @@ if (optional_param('sort', null, PARAM_INT) !== null && optional_param('id', nul
             $i = 1;
             $studentsdata = [];
             foreach ($students as $student) {
-
                 if (!empty($student->orderid)) {
                     $object = (object)[
                         'id' => $student->orderid,
@@ -137,7 +137,7 @@ if (optional_param('sort', null, PARAM_INT) !== null && optional_param('id', nul
     }
 }
 
-$course = $DB->get_record('course', array('id' => $cm->course));
+$course = $DB->get_record('course', ['id' => $cm->course]);
 $context = \context_module::instance($cm->id);
 require_capability('mod/videoassessment:managesorting', $context);
 
@@ -145,14 +145,14 @@ $va = new \mod_videoassessment\va($context, $cm, $course);
 
 $PAGE->requires->css('/mod/videoassessment/font/font-awesome/css/font-awesome.min.css');
 $PAGE->requires->jquery();
-$PAGE->requires->js_call_amd('mod_videoassessment/assignclass', 'assignclassSortByGroup', array());
+$PAGE->requires->js_call_amd('mod_videoassessment/assignclass', 'assignclassSortByGroup', []);
 
-$url = new \moodle_url('/mod/videoassessment/assignclass/index.php', array('id' => $cm->id, 'groupid' => $groupid));
+$url = new \moodle_url('/mod/videoassessment/assignclass/index.php', ['id' => $cm->id, 'groupid' => $groupid]);
 $PAGE->set_url($url);
 
 $students = $va->get_students_sort($groupid, true);
 
-$groups = $DB->get_records('groups', array('courseid' => $course->id), '', 'id, name');
+$groups = $DB->get_records('groups', ['courseid' => $course->id], '', 'id, name');
 
 if (empty($groupid)) {
     $itemid = $course->id;
@@ -162,7 +162,7 @@ if (empty($groupid)) {
     $type = 'group';
 }
 
-$sortitem = $DB->get_record('videoassessment_sort_items', array('type' => $type, 'itemid' => $itemid));
+$sortitem = $DB->get_record('videoassessment_sort_items', ['type' => $type, 'itemid' => $itemid]);
 
 if (!empty($sortitem)) {
     $sortby = $sortitem->sortby;
@@ -170,22 +170,21 @@ if (!empty($sortitem)) {
     $sortby = 0;
 }
 
-$form = new assign_class(null, (object)array(
+$form = new assign_class(null, (object)[
     'va' => $va,
     'sortby' => $sortby,
     'students' => $students,
     'groups' => $groups,
     'groupid' => $groupid,
-));
+]);
 
 if ($data = $form->get_data()) {
-
     try {
         $transaction = $DB->start_delegated_transaction();
 
         $sortby = $data->sortby;
         $groupid = $data->groupid;
-        $orderidarr = optional_param_array('orderid', array(), PARAM_INT);
+        $orderidarr = optional_param_array('orderid', [], PARAM_INT);
 
         if (!empty($groupid)) {
             $type = 'group';
@@ -195,7 +194,7 @@ if ($data = $form->get_data()) {
             $itemid = $cm->course;
         }
 
-        $sortitem = $DB->get_record('videoassessment_sort_items', array('type' => $type, 'itemid' => $itemid));
+        $sortitem = $DB->get_record('videoassessment_sort_items', ['type' => $type, 'itemid' => $itemid]);
 
         if (!$sortitem) {
             $object = new \stdClass();

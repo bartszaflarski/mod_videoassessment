@@ -42,7 +42,6 @@ use core_grades\component_gradeitems;
  * @see moodleform_mod
  */
 class mod_videoassessment_mod_form extends moodleform_mod {
-
     /** @var int Default number of peers for assessment */
     const DEFAULT_USED_PEERS = 1;
 
@@ -133,8 +132,12 @@ class mod_videoassessment_mod_form extends moodleform_mod {
 
         // Assign Peer Assessors - within the same section, wrapped in a div for show/hide.
         $mform->addElement('html', '<div id="assign-peer-assessors-container">');
-        $mform->addElement('static', 'assignpeerassessorslabel', '',
-            '<h5 class="mt-3">' . get_string('assignpeerassessors', 'videoassessment') . '</h5>');
+        $mform->addElement(
+            'static',
+            'assignpeerassessorslabel',
+            '',
+            '<h5 class="mt-3">' . get_string('assignpeerassessors', 'videoassessment') . '</h5>'
+        );
 
         // Show peer assignment interface (works for both new and existing activities).
         $peershtml = $this->render_peers_assignment_interface($cm);
@@ -240,7 +243,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                         var recordItem = document.getElementById("fitem_id_allowvideorecord");
                         if (uploadItem) uploadItem.style.opacity = "0.5";
                         if (recordItem) recordItem.style.opacity = "0.5";
-                        
+
                         // Also try by input name
                         var uploadInput = document.querySelector("input[name=\'allowvideoupload\']");
                         var recordInput = document.querySelector("input[name=\'allowvideorecord\']");
@@ -297,9 +300,9 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'submitbutton_rubric_btn',
             get_string('saveandcreaterubric', 'videoassessment'),
             [
-                'id' => 'id_submitbutton_rubric', 
+                'id' => 'id_submitbutton_rubric',
                 'type' => 'button',
-                'data-formchangechecker-ignore-submit' => '1'
+                'data-formchangechecker-ignore-submit' => '1',
             ],
             ['customclassoverride' => 'btn btn-primary']
         );
@@ -339,57 +342,57 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         }
 
             $ratingsum = $data['ratingteacher'] + $data['ratingself'] + $data['ratingpeer'] + $data['ratingclass'];
-            if ($ratingsum != 100) {
-                $errors['ratingerror'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
-            }
+        if ($ratingsum != 100) {
+            $errors['ratingerror'] = get_string('settotalratingtoahundredpercent', 'videoassessment');
+        }
 
-            if (!empty($data['allowsubmissionsfromdate']) && !empty($data['duedate'])) {
-                if ($data['duedate'] < $data['allowsubmissionsfromdate']) {
-                    $errors['duedate'] = get_string('duedatevalidation', 'assign');
-                }
+        if (!empty($data['allowsubmissionsfromdate']) && !empty($data['duedate'])) {
+            if ($data['duedate'] < $data['allowsubmissionsfromdate']) {
+                $errors['duedate'] = get_string('duedatevalidation', 'assign');
             }
-            if (!empty($data['cutoffdate']) && !empty($data['duedate'])) {
-                if ($data['cutoffdate'] < $data['duedate']) {
-                    $errors['cutoffdate'] = get_string('cutoffdatevalidation', 'assign');
-                }
+        }
+        if (!empty($data['cutoffdate']) && !empty($data['duedate'])) {
+            if ($data['cutoffdate'] < $data['duedate']) {
+                $errors['cutoffdate'] = get_string('cutoffdatevalidation', 'assign');
             }
-            if (!empty($data['allowsubmissionsfromdate']) && !empty($data['cutoffdate'])) {
-                if ($data['cutoffdate'] < $data['allowsubmissionsfromdate']) {
-                    $errors['cutoffdate'] = get_string('cutoffdatefromdatevalidation', 'assign');
-                }
+        }
+        if (!empty($data['allowsubmissionsfromdate']) && !empty($data['cutoffdate'])) {
+            if ($data['cutoffdate'] < $data['allowsubmissionsfromdate']) {
+                $errors['cutoffdate'] = get_string('cutoffdatefromdatevalidation', 'assign');
             }
-            if ($data['gradingduedate']) {
-                if ($data['allowsubmissionsfromdate'] && $data['allowsubmissionsfromdate'] > $data['gradingduedate']) {
-                    $errors['gradingduedate'] = get_string('gradingduefromdatevalidation', 'assign');
-                }
-                if ($data['duedate'] && $data['duedate'] > $data['gradingduedate']) {
-                    $errors['gradingduedate'] = get_string('gradingdueduedatevalidation', 'assign');
-                }
+        }
+        if ($data['gradingduedate']) {
+            if ($data['allowsubmissionsfromdate'] && $data['allowsubmissionsfromdate'] > $data['gradingduedate']) {
+                $errors['gradingduedate'] = get_string('gradingduefromdatevalidation', 'assign');
             }
+            if ($data['duedate'] && $data['duedate'] > $data['gradingduedate']) {
+                $errors['gradingduedate'] = get_string('gradingdueduedatevalidation', 'assign');
+            }
+        }
 
             // Validate peer assignments: if peer rating > 0 or usedpeers > 0, peers must be assigned.
             $peerrating = isset($data['ratingpeer']) ? intval($data['ratingpeer']) : 0;
             $usedpeers = isset($data['usedpeers']) ? intval($data['usedpeers']) : 0;
 
-            if ($peerrating > 0 || $usedpeers > 0) {
-                // Check if any peers have been assigned.
-                $peerassignments = isset($data['peerassignments']) ? $data['peerassignments'] : '{}';
-                $peersdata = json_decode($peerassignments, true);
+        if ($peerrating > 0 || $usedpeers > 0) {
+            // Check if any peers have been assigned.
+            $peerassignments = isset($data['peerassignments']) ? $data['peerassignments'] : '{}';
+            $peersdata = json_decode($peerassignments, true);
 
-                $haspeers = false;
-                if (is_array($peersdata)) {
-                    foreach ($peersdata as $userid => $peers) {
-                        if (!empty($peers) && is_array($peers) && count($peers) > 0) {
-                            $haspeers = true;
-                            break;
-                        }
+            $haspeers = false;
+            if (is_array($peersdata)) {
+                foreach ($peersdata as $userid => $peers) {
+                    if (!empty($peers) && is_array($peers) && count($peers) > 0) {
+                        $haspeers = true;
+                        break;
                     }
                 }
-
-                if (!$haspeers) {
-                    $errors['peerassignmenterror'] = get_string('peerassignmentrequired', 'videoassessment');
-                }
             }
+
+            if (!$haspeers) {
+                $errors['peerassignmenterror'] = get_string('peerassignmentrequired', 'videoassessment');
+            }
+        }
 
         return $errors;
     }
@@ -410,7 +413,6 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $itemnumber = component_gradeitems::get_itemnumber_from_itemname($component, $itemname);
         $gradepassfieldname = component_gradeitems::get_field_name_for_itemnumber($component, $itemnumber, 'gradepass');
         if ($this->_features->hasgrades) {
-
             if (!$this->_features->rating || $this->_features->gradecat) {
                 $mform->addElement('header', 'modstandardgrade', get_string('grade', 'videoassessment'));
                 $mform->addHelpButton('modstandardgrade', 'grade', 'videoassessment');
@@ -423,22 +425,23 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 $mform->setDefault('grade', $CFG->gradepointdefault);
             }
 
-            if ($this->_features->advancedgrading
+            if (
+                $this->_features->advancedgrading
                 && !empty($this->current->_advancedgradingdata['methods'])
-                && !empty($this->current->_advancedgradingdata['areas'])) {
-
+                && !empty($this->current->_advancedgradingdata['areas'])
+            ) {
                 // Use a single grading method selector for all areas.
                 // Get the first area name to use as the primary selector.
                 $firstareaname = key($this->current->_advancedgradingdata['areas']);
 
                     $mform->addElement(
                         'select',
-                    'advancedgradingmethod_' . $firstareaname,
+                        'advancedgradingmethod_' . $firstareaname,
                         get_string('advancedgradingmethodsgroup', 'videoassessment'),
                         $this->current->_advancedgradingdata['methods']
                     );
                 $mform->addHelpButton('advancedgradingmethod_' . $firstareaname, 'advancedgradingmethodsgroup', 'videoassessment');
-                
+
                 // Set default grading method to 'rubric' if it's available.
                 if (isset($this->current->_advancedgradingdata['methods']['rubric'])) {
                     $mform->setDefault('advancedgradingmethod_' . $firstareaname, 'rubric');
@@ -459,7 +462,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
 
             if ($this->_features->gradecat) {
                 $mform->addElement(
-                            'select',
+                    'select',
                     'gradecat',
                     get_string('gradecategory', 'videoassessment'),
                     grade_get_categories_menu($COURSE->id, $this->_outcomesused)
@@ -526,9 +529,9 @@ class mod_videoassessment_mod_form extends moodleform_mod {
 
         // Accepted difference in scores (shown when training = yes).
         $diffpercentopts = [];
-            for ($i = 100; $i >= 0; $i--) {
+        for ($i = 100; $i >= 0; $i--) {
             $diffpercentopts[$i] = $i . '%';
-            }
+        }
         $mform->addElement('select', 'accepteddifference', get_string('accepteddifference', 'videoassessment'), $diffpercentopts);
             $mform->setDefault('accepteddifference', 20);
             $mform->addHelpButton('accepteddifference', 'accepteddifference', 'videoassessment');
@@ -611,46 +614,46 @@ class mod_videoassessment_mod_form extends moodleform_mod {
 
         // Bulk upload videos and related management links (only for existing activities).
         if ($cm) {
-        $viewurl = new moodle_url('/mod/videoassessment/view.php', ['id' => $cm->id]);
-        $context = context_module::instance($cm->id);
+            $viewurl = new moodle_url('/mod/videoassessment/view.php', ['id' => $cm->id]);
+            $context = context_module::instance($cm->id);
 
-        $va = $DB->get_record('videoassessment', ['id' => $cm->instance]);
-        $course = $DB->get_record('course', ['id' => $va->course]);
+            $va = $DB->get_record('videoassessment', ['id' => $cm->instance]);
+            $course = $DB->get_record('course', ['id' => $va->course]);
 
-        require_once($CFG->dirroot . '/mod/videoassessment/locallib.php');
-        $vaobj = new va($context, $cm, $course);
-        $isteacher = $vaobj->is_teacher();
+            require_once($CFG->dirroot . '/mod/videoassessment/locallib.php');
+            $vaobj = new va($context, $cm, $course);
+            $isteacher = $vaobj->is_teacher();
 
-        if ($isteacher) {
+            if ($isteacher) {
                 // Bulk Upload Videos.
                 if (!va::uses_mobile_upload()) {
-                $this->add_link_element(
-                    'videoassessment:bulkupload',
-                    new moodle_url('/mod/videoassessment/bulkupload/index.php', ['cmid' => $cm->id]),
-                    get_string('videoassessment:bulkupload', 'videoassessment'),
-                );
-            }
+                    $this->add_link_element(
+                        'videoassessment:bulkupload',
+                        new moodle_url('/mod/videoassessment/bulkupload/index.php', ['cmid' => $cm->id]),
+                        get_string('videoassessment:bulkupload', 'videoassessment'),
+                    );
+                }
 
                 // Bulk Video Deletion.
-            $this->add_link_element(
-                'deletevideos',
-                new moodle_url('/mod/videoassessment/deletevideos.php', ['id' => $cm->id]),
-                get_string('deletevideos', 'videoassessment'),
-            );
+                $this->add_link_element(
+                    'deletevideos',
+                    new moodle_url('/mod/videoassessment/deletevideos.php', ['id' => $cm->id]),
+                    get_string('deletevideos', 'videoassessment'),
+                );
 
-                // Associate.
-            $this->add_link_element(
-                'associate',
-                new moodle_url($viewurl, ['action' => 'videos']),
-                get_string('associate', 'videoassessment'),
-            );
+                    // Associate.
+                $this->add_link_element(
+                    'associate',
+                    new moodle_url($viewurl, ['action' => 'videos']),
+                    get_string('associate', 'videoassessment'),
+                );
 
-                // Publish Videos.
-            $this->add_link_element(
-                'publishvideos',
-                new moodle_url($viewurl, ['action' => 'publish']),
-                get_string('publishvideos', 'videoassessment'),
-            );
+                    // Publish Videos.
+                $this->add_link_element(
+                    'publishvideos',
+                    new moodle_url($viewurl, ['action' => 'publish']),
+                    get_string('publishvideos', 'videoassessment'),
+                );
             }
         }
     }
@@ -710,7 +713,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'advcheckbox',
             'teachercommentnotification',
             get_string('teachercommentnotification', 'videoassessment'),
-            '<b>'.
+            '<b>' .
             get_string('teachercomentnotificationlabel', 'videoassessment') .
             '</b><label class="teacher-notification-displaybtn collapsed"></label>',
         );
@@ -720,7 +723,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>1.'. get_string('whentosendnotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>1.' . get_string('whentosendnotification', 'videoassessment') . '</b></div>',
         );
         $teachernotificationgroup[] = $mform->createElement(
             'advcheckbox',
@@ -751,7 +754,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>3.'. get_string('templatetextfornotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>3.' . get_string('templatetextfornotification', 'videoassessment') . '</b></div>',
         );
         $teachernotificationgroup[] = $mform->createElement(
             'textarea',
@@ -766,7 +769,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'advcheckbox',
             'peercommentnotification',
             '',
-            '<b>'.
+            '<b>' .
             get_string('peercomentnotificationlabel', 'videoassessment') .
             '</b><label class="teacher-notification-displaybtn collapsed"></label>',
         );
@@ -775,7 +778,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>1.'. get_string('whentosendnotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>1.' . get_string('whentosendnotification', 'videoassessment') . '</b></div>',
         );
         $peernotificationgroup[] = $mform->createElement(
             'advcheckbox',
@@ -800,7 +803,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>3.'. get_string('templatetextfornotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>3.' . get_string('templatetextfornotification', 'videoassessment') . '</b></div>',
         );
         $peernotificationgroup[] = $mform->createElement(
             'textarea',
@@ -816,7 +819,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'advcheckbox',
             'remindernotification',
             "",
-            '<b>'. get_string('remindernotification', 'videoassessment') .
+            '<b>' . get_string('remindernotification', 'videoassessment') .
             '</b><label class="reminder-notification-displaybtn collapsed"></label>',
         );
         $mform->setDefault('remindernotification', 0);
@@ -824,7 +827,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>1.'. get_string('whentosendnotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>1.' . get_string('whentosendnotification', 'videoassessment') . '</b></div>',
         );
         $remindernotificationgroup[] = $mform->createElement(
             'advcheckbox',
@@ -843,7 +846,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             '',
             null,
             '<span class="form-check-inline fitem" style="width: auto;">' .
-            get_string('daysbefore', 'videoassessment') .'</span>',
+            get_string('daysbefore', 'videoassessment') . '</span>',
         );
         $remindernotificationgroup[] = $mform->createElement('static', '', null, '</br>');
         $remindernotificationgroup[] = $mform->createElement(
@@ -906,13 +909,14 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>3.'. get_string('templatetextfornotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>3.' . get_string('templatetextfornotification', 'videoassessment') . '</b></div>',
         );
         $remindernotificationgroup[] = $mform->createElement(
             'textarea',
             'remindernotificationtemplate',
             "",
-            ['rows' => 10, 'cols' => 80]);
+            ['rows' => 10, 'cols' => 80]
+        );
         $mform->setDefault('remindernotificationtemplate', get_string('remindernotificationtemplate', 'videoassessment'));
         $mform->addGroup($remindernotificationgroup, 'remindernotificationgroup', "", ['', ' '], false);
 
@@ -928,7 +932,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>1.'. get_string('whentosendnotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>1.' . get_string('whentosendnotification', 'videoassessment') . '</b></div>',
         );
         $videonotificationgroup[] = $mform->createElement(
             'advcheckbox',
@@ -946,7 +950,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             'static',
             '',
             null,
-            '<div class="max-with"><b>2.'. get_string('templatetextfornotification', 'videoassessment') .'</b></div>',
+            '<div class="max-with"><b>2.' . get_string('templatetextfornotification', 'videoassessment') . '</b></div>',
         );
         $videonotificationgroup[] = $mform->createElement(
             'textarea',
@@ -997,8 +1001,11 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $students = $this->get_students_only($this->context);
 
         if (empty($students)) {
-            $o .= html_writer::tag('p', get_string('nostudentsingroup', 'videoassessment'),
-                ['class' => 'alert alert-info']);
+            $o .= html_writer::tag(
+                'p',
+                get_string('nostudentsingroup', 'videoassessment'),
+                ['class' => 'alert alert-info']
+            );
             return $o;
         }
 
@@ -1026,16 +1033,20 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             $namefieldsql = \core_user\fields::for_name()->get_sql('u', false, '', '', false);
             $userfields = 'u.id, ' . $namefieldsql->selects;
             $allmembers = groups_get_members($group->id, $userfields);
-            
+
             // Filter to only include students (same logic as get_students_only).
             $coursecontext = \context_course::instance($COURSE->id);
             $studentrole = $DB->get_record('role', ['shortname' => 'student'], 'id');
             if ($studentrole) {
-                $excluderoles = $DB->get_records_select('role',
+                $excluderoles = $DB->get_records_select(
+                    'role',
                     "shortname IN ('teacher', 'editingteacher', 'manager', 'coursecreator')",
-                    null, '', 'id');
+                    null,
+                    '',
+                    'id'
+                );
                 $excluderoleids = array_keys($excluderoles);
-                
+
                 foreach ($allmembers as $member) {
                     $hasstudentrole = user_has_role_assignment($member->id, $studentrole->id, $coursecontext->id);
                     $hasexcludedrole = false;
@@ -1052,7 +1063,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     }
                 }
             }
-            
+
             if (!empty($groupmembers)) {
                 $groupdata[$group->id] = [
                     'name' => $group->name,
@@ -1060,13 +1071,13 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 ];
             }
         }
-        
+
         // Build allUsers data (only students, no teachers).
         $allusersdata = [];
         foreach ($allusers as $user) {
             $allusersdata[$user->id] = fullname($user);
         }
-        
+
         // Use only students for table display.
         $allusersfortable = $students;
 
@@ -1152,7 +1163,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             foreach ($userpeers as $peerid) {
                 // Check studentdata for peer name.
                 $peername = isset($studentdata[$peerid]) ? $studentdata[$peerid] : null;
-                
+
                 if ($peername) {
                     $o .= html_writer::start_tag('span', [
                         'class' => 'peer-badge badge badge-secondary mr-1 mb-1',
@@ -1180,7 +1191,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                 'style' => 'width: auto; display: inline-block;',
             ]);
             $o .= html_writer::tag('option', get_string('addpeer', 'videoassessment'), ['value' => '']);
-            
+
             // Add students only.
             foreach ($students as $candidate) {
                 if ($candidate->id != $user->id) {
@@ -1191,7 +1202,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                     ]);
                 }
             }
-            
+
             $o .= html_writer::end_tag('select');
 
             $o .= html_writer::end_tag('td');
@@ -1240,9 +1251,13 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         }
 
         // Get role IDs for non-student roles (teacher, editingteacher, manager).
-        $excluderoles = $DB->get_records_select('role',
+        $excluderoles = $DB->get_records_select(
+            'role',
             "shortname IN ('teacher', 'editingteacher', 'manager', 'coursecreator')",
-            null, '', 'id');
+            null,
+            '',
+            'id'
+        );
         $excluderoleids = array_keys($excluderoles);
 
         // Get all users enrolled with the student role in the course context.
@@ -1318,15 +1333,15 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         // Set default to 'rubric' for new instances or when rubric definition exists.
         if (!empty($this->current->_advancedgradingdata['areas'])) {
             $areas = array_keys($this->current->_advancedgradingdata['areas']);
-            
+
             foreach ($areas as $areaname) {
                 $fieldname = 'advancedgradingmethod_' . $areaname;
-                
+
                 // Only set default if field exists.
                 if ($mform->elementExists($fieldname)) {
                     $currentvalue = $mform->getElementValue($fieldname);
                     $isempty = empty($currentvalue) || (is_array($currentvalue) && empty($currentvalue[0]));
-                    
+
                     // Check if a rubric definition exists for this area.
                     $hasrubricdefinition = false;
                     global $CFG;
@@ -1355,9 +1370,10 @@ class mod_videoassessment_mod_form extends moodleform_mod {
                             }
                         } catch (Exception $e) {
                             // Ignore errors, just continue.
+                            debugging('Error checking rubric definition: ' . $e->getMessage(), DEBUG_NORMAL);
                         }
                     }
-                    
+
                     // Set to 'rubric' if empty and rubric is available, or if rubric definition exists.
                     if (isset($this->current->_advancedgradingdata['methods']['rubric'])) {
                         if ($isempty || $hasrubricdefinition) {

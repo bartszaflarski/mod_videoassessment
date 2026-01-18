@@ -27,7 +27,6 @@ defined('MOODLE_INTERNAL') || die();
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class mod_videoassessment_rubric_form_duplicate extends moodleform {
-
     /**
      * Define the form elements for duplication of a teacher's rubric.
      *
@@ -84,8 +83,11 @@ class mod_videoassessment_rubric_form_duplicate extends moodleform {
             $errors['areas[' . $areaids[0] . ']'] = get_string('pleasechoosegradingareas', 'videoassessment');
         } else {
             $areaids = implode(', ', array_keys($data['areas']));
-            $areadefinitions = $DB->get_records_sql('SELECT areaid,timecreated FROM {grading_definitions} WHERE areaid IN (:areaids)', ['areaids' => $areaids]);
-            $areasgrading = $DB->get_records('grading_areas', array('contextid' => $data['contextid']));
+            $areadefinitions = $DB->get_records_sql(
+                'SELECT areaid,timecreated FROM {grading_definitions} WHERE areaid IN (:areaids)',
+                ['areaids' => $areaids]
+            );
+            $areasgrading = $DB->get_records('grading_areas', ['contextid' => $data['contextid']]);
             if (is_array($areasgrading)) {
                 foreach ($areasgrading as $area) {
                     if ($area->areaname == 'beforeteacher') {
@@ -93,7 +95,7 @@ class mod_videoassessment_rubric_form_duplicate extends moodleform {
                     }
                 }
             }
-            $gradingdefinitionteacher = $DB->get_record('grading_definitions', array('areaid' => $areateacherid));
+            $gradingdefinitionteacher = $DB->get_record('grading_definitions', ['areaid' => $areateacherid]);
             if (!empty($areadefinitions) && isset($gradingdefinitionteacher)) {
                 foreach ($areadefinitions as $area) {
                     if ($gradingdefinitionteacher->timecreated == $area->timecreated) {
