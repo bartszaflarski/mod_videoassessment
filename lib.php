@@ -390,11 +390,68 @@ function videoassessment_grading_areas_list() {
 function mod_videoassessment_pluginfile($course, $cm, $context, $filearea, $args, $forcedownload) {
     global $CFG, $DB;
 
+    // Handle editor fileareas (like submissioncomment) which have itemid in args.
+    if ($filearea === 'submissioncomment') {
+        // Students can view feedback comments if they have viewcomments capability.
+        if (!has_capability('mod/videoassessment:viewcomments', $context)) {
+            send_file_not_found();
+        }
+
+        $itemid = (int)array_shift($args);
+        $filename = array_pop($args);
+        // URL decode the filename in case it contains encoded characters (e.g., %20 for space).
+        $filename = urldecode($filename);
+        
+        // Build filepath from remaining args (subdirectories).
+        $filepath = '/';
+        if (!empty($args)) {
+            $filepath = '/' . implode('/', $args) . '/';
+        }
+
+        $fs = get_file_storage();
+        
+        // First try to get the file with the constructed filepath.
+        $file = $fs->get_file($context->id, 'mod_videoassessment', $filearea, $itemid, $filepath, $filename);
+        
+        // If not found, search all files in this itemid for a matching filename.
+        // This handles cases where files are stored in subdirectories or filepath doesn't match exactly.
+        if (!$file || $file->is_directory()) {
+            // Get all files in this filearea/itemid (excluding directories).
+            $files = $fs->get_area_files($context->id, 'mod_videoassessment', $filearea, $itemid, false, 'id', false);
+            foreach ($files as $areafile) {
+                // Skip directories.
+                if ($areafile->is_directory()) {
+                    continue;
+                }
+                // Compare filenames - try exact match first, then case-insensitive.
+                $storedfilename = $areafile->get_filename();
+                if ($storedfilename === $filename || strcasecmp($storedfilename, $filename) === 0) {
+                    $file = $areafile;
+                    break;
+                }
+                // Also try URL-encoded version in case filename wasn't decoded properly.
+                if ($storedfilename === urldecode($filename) || strcasecmp($storedfilename, urldecode($filename)) === 0) {
+                    $file = $areafile;
+                    break;
+                }
+            }
+        }
+        
+        if (!$file || $file->is_directory()) {
+            send_file_not_found();
+        }
+
+        \core\session\manager::write_close(); // Unlock session during fileserving.
+        send_stored_file($file, HOURSECS, 0, $forcedownload);
+        return;
+    }
+
     // Allow Self Assessment/Peer Assessment to view other people's files.
     if (!has_capability('mod/videoassessment:gradepeer', $context)) {
         send_file_not_found();
     }
 
+    // For other fileareas, use the original method.
     $fullpath = "/{$context->id}/mod_videoassessment/$filearea/" . implode('/', $args);
 
     $fs = get_file_storage();

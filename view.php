@@ -116,7 +116,24 @@ if (optional_param('ajax', null, PARAM_ALPHANUM)) {
             $grades = va::get_grade_items_by_id($gradingarea, $userid, $va->id);
             foreach ($grades as $item => $gradeitem) {
                 if ($gradeitem->id == $id) {
-                    $comment = '<label class="mobile-submissioncomment">' . $gradeitem->submissioncomment . '</label>';
+                    // Format the comment to convert @@PLUGINFILE@@ placeholders to actual URLs.
+                    $commentformat = isset($gradeitem->submissioncommentformat) ? $gradeitem->submissioncommentformat : FORMAT_HTML;
+                    // First rewrite @@PLUGINFILE@@ placeholders to actual URLs.
+                    // Use gradeid (from videoassessment_grades table) not gradeitem->id (from grade_items table).
+                    $gradeid = isset($gradeitem->gradeid) ? $gradeitem->gradeid : $gradeitem->id;
+                    $commenttext = file_rewrite_pluginfile_urls(
+                        $gradeitem->submissioncomment,
+                        'pluginfile.php',
+                        $context->id,
+                        'mod_videoassessment',
+                        'submissioncomment',
+                        $gradeid
+                    );
+                    // Then format the text.
+                    $formattedcomment = format_text($commenttext, $commentformat, [
+                        'context' => $context,
+                    ]);
+                    $comment = '<label class="mobile-submissioncomment">' . $formattedcomment . '</label>';
                     if ($gradertype == "peer") {
                         $label = '<span class="blue box">' . get_string($gradertype, 'videoassessment') . '</span>';
                     } else if ($gradertype == "teacher") {

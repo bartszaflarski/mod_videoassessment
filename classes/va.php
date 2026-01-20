@@ -2228,16 +2228,36 @@ class va {
                     if (empty($gradeitem->submissioncomment)) {
                         break;
                     }
-                    $comment = '<label class="submissioncomment">' . $gradeitem->submissioncomment . '</label>';
+                    // Format the comment to convert @@PLUGINFILE@@ placeholders to actual URLs.
+                    $commentformat = isset($gradeitem->submissioncommentformat) ? $gradeitem->submissioncommentformat : FORMAT_HTML;
+                    // First rewrite @@PLUGINFILE@@ placeholders to actual URLs.
+                    // Use gradeid (from videoassessment_grades table) not gradeitem->id (from grade_items table).
+                    $gradeid = isset($gradeitem->gradeid) ? $gradeitem->gradeid : $gradeitem->id;
+                    $commenttext = file_rewrite_pluginfile_urls(
+                        $gradeitem->submissioncomment,
+                        'pluginfile.php',
+                        $this->context->id,
+                        'mod_videoassessment',
+                        'submissioncomment',
+                        $gradeid
+                    );
+                    // Then format the text.
+                    $formattedcomment = format_text($commenttext, $commentformat, [
+                        'context' => $this->context,
+                    ]);
+                    $comment = '<label class="submissioncomment">' . $formattedcomment . '</label>';
                     if ($this->uses_mobile_upload()) {
                         $commentbutton = '';
-                        if (strlen($gradeitem->submissioncomment) > 30) {
-                            $gradeitem->submissioncomment = substr($gradeitem->submissioncomment, 0, 10);
+                        $plaintext = strip_tags($gradeitem->submissioncomment);
+                        if (strlen($plaintext) > 30) {
+                            $shortcomment = substr($plaintext, 0, 10);
                             $commentbutton = "<button type='button' class='commentbutton btn btn-secondary' id = '"
                                 . $gradeitem->id . "' cmid = '" . $this->va->id . "' userid = '" . $userid . "' timing = '" . $timing . "'><h2>...</h2></button>";
+                            $comment = '<label class="mobile-submissioncomment">' . $shortcomment . '</label>';
+                            $comment = $comment . $commentbutton;
+                        } else {
+                            $comment = '<label class="mobile-submissioncomment">' . $formattedcomment . '</label>';
                         }
-                        $comment = '<label class="mobile-submissioncomment">' . $gradeitem->submissioncomment . '</label>';
-                        $comment = $comment . $commentbutton;
                     }
 
                     if ($gradertype == "peer") {
@@ -2291,7 +2311,7 @@ class va {
                     . '</span><span class="comment-score">'
                     . (int) $usergrades->finalscore . '</span>'
                     . \html_writer::end_tag('div');
-                $o .= $OUTPUT->container(get_string('grade') . ': ' . implode(', ', $timinggrades) . $totalscore . $selffairnessbonus . $fairnessbonus . $finalscore, 'finalgrade');
+                $o .= $OUTPUT->container(get_string('grade', 'videoassessment') . ': ' . implode(', ', $timinggrades) . $totalscore . $selffairnessbonus . $fairnessbonus . $finalscore, 'finalgrade');
             }
         }
         $o .= \html_writer::end_tag('div');
@@ -2456,7 +2476,7 @@ class va {
         global $DB;
 
         return $DB->get_records_sql('
-                SELECT gi.id, gi.grader, g.grade, g.submissioncomment, g.timemarked
+                SELECT gi.id, gi.grader, g.id as gradeid, g.grade, g.submissioncomment, g.timemarked
                     FROM {videoassessment_grade_items} gi
                         LEFT JOIN {videoassessment_grades} g ON g.videoassessment = :va2
                             AND g.gradeitem = gi.id
@@ -2484,7 +2504,7 @@ class va {
         global $DB;
 
         return $DB->get_records_sql('
-                SELECT gi.id, gi.grader, g.grade, g.submissioncomment, g.timemarked
+                SELECT gi.id, gi.grader, g.id as gradeid, g.grade, g.submissioncomment, g.timemarked
                     FROM {videoassessment_grade_items} gi
                         LEFT JOIN {videoassessment_grades} g ON g.videoassessment = :va2
                             AND g.gradeitem = gi.id
@@ -2553,6 +2573,16 @@ class va {
                 array('videoassessment' => $this->instance, 'userid' => $userid)
             )
         ) {
+            // Ensure bonus fields exist (they might be missing in older records).
+            if (!isset($grades->selffairnessbonus)) {
+                $grades->selffairnessbonus = 0;
+            }
+            if (!isset($grades->fairnessbonus)) {
+                $grades->fairnessbonus = 0;
+            }
+            if (!isset($grades->finalscore)) {
+                $grades->finalscore = 0;
+            }
             return $grades;
         }
 

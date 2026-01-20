@@ -185,7 +185,24 @@ class print_page {
                     $gradingarea = $timing . $gradertype;
                     $grades = $this->va->get_grade_items($gradingarea, $userid);
                     foreach ($grades as $gradeitem) {
-                        $comment = '<label class="submissioncomment">' . $gradeitem->submissioncomment . '</label>';
+                        // Format the comment to convert @@PLUGINFILE@@ placeholders to actual URLs.
+                        $commentformat = isset($gradeitem->submissioncommentformat) ? $gradeitem->submissioncommentformat : FORMAT_HTML;
+                        // First rewrite @@PLUGINFILE@@ placeholders to actual URLs.
+                        // Use gradeid (from videoassessment_grades table) not gradeitem->id (from grade_items table).
+                        $gradeid = isset($gradeitem->gradeid) ? $gradeitem->gradeid : $gradeitem->id;
+                        $commenttext = file_rewrite_pluginfile_urls(
+                            $gradeitem->submissioncomment,
+                            'pluginfile.php',
+                            $this->va->context->id,
+                            'mod_videoassessment',
+                            'submissioncomment',
+                            $gradeid
+                        );
+                        // Then format the text.
+                        $formattedcomment = format_text($commenttext, $commentformat, [
+                            'context' => $this->va->context,
+                        ]);
+                        $comment = '<label class="submissioncomment">' . $formattedcomment . '</label>';
                         if ($gradertype == "peer") {
                             $lable = '<span class="blue box">' . $this->va::str('peer') . '</span>';
                         } else if ($gradertype == "teacher") {
@@ -230,7 +247,7 @@ class print_page {
                         . (int) $usergrades->finalscore
                         . '</span>'
                         . \html_writer::end_tag('div');
-                    $o .= $OUTPUT->container(get_string('grade') . ': ' . implode(', ', $timinggrades) . $totalscore . $fairnessbonus . $finalscore, 'finalgrade');
+                    $o .= $OUTPUT->container(get_string('grade', 'videoassessment') . ': ' . implode(', ', $timinggrades) . $totalscore . $fairnessbonus . $finalscore, 'finalgrade');
                 }
             }
             $o .= \html_writer::end_tag('div');
