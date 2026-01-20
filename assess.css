@@ -88,7 +88,7 @@
     display: block;
 }
 .path-mod-videoassessment form.gradingform {
-     width: 73.2144%;
+     width: 100%;
 }
 .side-pre-only #page-content #region-post-box{
   margin-left:0 !important;
@@ -141,6 +141,13 @@
 #page-mod-videoassessment-view.assess-page.path-mod-videoassessment #page.container-fluid .gradingform_rubric {
     width: 100%;
     max-width: none;
+}
+
+/* Make rubric form full width on all screens */
+.path-mod-videoassessment .gradingform_rubric,
+.gradingform_rubric {
+    width: 100%;
+    max-width: 100%;
 }
 
 .remark {
@@ -282,15 +289,37 @@
         float: none;
         width: 100%;
         margin: 0 0 20px 0;
-        height: 25vh;
+        height: 25vh !important;
+        min-height: 25vh !important;
+        max-height: 25vh !important;
         z-index: 999;
-        position: relative;
+        position: sticky;
+        top: 0;
+        display: flex;
+        flex-direction: column;
+        /* Prevent video jumping during scroll - isolate rendering */
+        transform: translate3d(0, 0, 0);
+        -webkit-transform: translate3d(0, 0, 0);
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
     }
     
     .path-mod-videoassessment .assess-form-videos .video-wrap,
     .assess-form-videos .video-wrap {
-        width: 100%;
-        height: 100%;
+        width: 100% !important;
+        height: 100% !important;
+        flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        margin: 0;
+        padding: 0;
+        /* Prevent video jumping during scroll */
+        transform: translate3d(0, 0, 0);
+        -webkit-transform: translate3d(0, 0, 0);
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
     }
     
     .path-mod-videoassessment .assess-form-videos video,
@@ -303,7 +332,19 @@
     .assess-form-videos embed,
     .path-mod-videoassessment .assess-form-videos .mediaplugin,
     .assess-form-videos .mediaplugin {
-        width: 100%;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+        display: block;
+        margin: 0;
+        padding: 0;
+        /* Prevent video jumping during scroll */
+        transform: translate3d(0, 0, 0);
+        -webkit-transform: translate3d(0, 0, 0);
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
     }
 
     .path-mod-videoassessment .gradingform,
@@ -311,6 +352,10 @@
         float: none;
         margin-left: 0;
         min-height: auto;
+        /* Prevent layout shifts during scroll */
+        -webkit-overflow-scrolling: touch;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
     }
 
     /* Convert main rubric table to block layout */
