@@ -706,13 +706,40 @@ function videoassessment_update_calendar($va) {
  * @return void
  */
 function videoassessment_auto_duplicate_rubric($contextid) {
-    global $DB, $CFG;
+    global $DB, $CFG, $_SERVER;
     
     require_once($CFG->dirroot . '/grade/grading/lib.php');
     require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
     
+    // Skip auto-duplication if we're in the middle of deleting a rubric.
+    // Check if we're on the grading management page with a delete action.
+    $deleteform = optional_param('deleteform', null, PARAM_INT);
+    if (!empty($deleteform)) {
+        return; // Don't auto-duplicate during deletion.
+    }
+    
+    // Also check if we're on the grading management page (even without deleteform param).
+    // This prevents auto-duplication from running during the deletion process.
+    $scriptpath = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '';
+    $requesturi = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    if (strpos($scriptpath, '/grade/grading/manage.php') !== false || 
+        strpos($requesturi, '/grade/grading/manage.php') !== false) {
+        // We're on the grading management page - skip auto-duplication to avoid interference.
+        return;
+    }
+    
+    // Check if there's a deleteform parameter in the URL (could be in REQUEST_URI).
+    if (strpos($requesturi, 'deleteform=') !== false) {
+        // Deletion is in progress - skip auto-duplication.
+        return;
+    }
+    
     // Get all grading areas for this context.
     $allareas = $DB->get_records('grading_areas', ['contextid' => $contextid, 'component' => 'mod_videoassessment']);
+    
+    if (empty($allareas)) {
+        return; // No grading areas found.
+    }
     
     // Find any area that has a rubric definition (prefer teacher, but use any that exists).
     $sourcearea = null;
@@ -749,7 +776,14 @@ function videoassessment_auto_duplicate_rubric($contextid) {
     }
     
     if (!$sourcearea || !$sourcedefinition) {
-        return; // No rubric found in any area.
+        return; // No rubric found in any area - don't try to duplicate.
+    }
+    
+    // Additional safety check: verify the source definition still exists and has criteria.
+    // This prevents issues if the definition was deleted between the check and duplication.
+    $criteriaexists = $DB->record_exists('gradingform_rubric_criteria', ['definitionid' => $sourcedefinition->id]);
+    if (!$criteriaexists) {
+        return; // Source definition has no criteria - don't duplicate.
     }
     
     // Get video assessment instance to check which areas are enabled.
