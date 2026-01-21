@@ -1166,7 +1166,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
 
                 if ($peername) {
                     $o .= html_writer::start_tag('span', [
-                        'class' => 'peer-badge badge badge-secondary mr-1 mb-1',
+                        'class' => 'peer-badge badge bg-secondary text-dark me-1 mb-1',
                         'data-peerid' => $peerid,
                         'style' => 'display: inline-block; margin: 2px;',
                     ]);

@@ -80,11 +80,42 @@ define(['jquery'], function($) {
      * @param {number} peerid - The peer ID to remove
      */
     function removePeer(userid, peerid) {
-        if (peerAssignments[userid]) {
-            const index = peerAssignments[userid].indexOf(peerid);
-            if (index > -1) {
-                peerAssignments[userid].splice(index, 1);
-            }
+        console.log('removePeer: userid:', userid, 'peerid:', peerid, 'peerAssignments:', peerAssignments);
+        
+        // Try multiple key formats to find the user's peer assignments.
+        const userPeers = peerAssignments[userid] || peerAssignments[parseInt(userid)] || peerAssignments[String(userid)] || [];
+        
+        if (!Array.isArray(userPeers) || userPeers.length === 0) {
+            console.log('No peers found for user:', userid);
+            return;
+        }
+        
+        // Find the peer to remove, handling type mismatches (string vs number).
+        const peeridNum = parseInt(peerid);
+        const peeridStr = String(peerid);
+        
+        // Try to find the index using both number and string comparison.
+        let index = userPeers.indexOf(peerid);
+        if (index === -1 && !isNaN(peeridNum)) {
+            index = userPeers.indexOf(peeridNum);
+        }
+        if (index === -1) {
+            index = userPeers.indexOf(peeridStr);
+        }
+        // Also try comparing each element as both number and string.
+        if (index === -1) {
+            index = userPeers.findIndex(function(p) {
+                return p == peerid || parseInt(p) === peeridNum || String(p) === peeridStr;
+            });
+        }
+        
+        if (index > -1) {
+            // Use the correct key format to update.
+            const key = peerAssignments[userid] ? userid : (peerAssignments[parseInt(userid)] ? parseInt(userid) : String(userid));
+            peerAssignments[key].splice(index, 1);
+            console.log('Peer removed successfully. Updated peerAssignments:', peerAssignments);
+        } else {
+            console.warn('Peer not found in array. userPeers:', userPeers, 'peerid:', peerid, 'peeridNum:', peeridNum, 'peeridStr:', peeridStr);
         }
 
         renderPeersForUser(userid);
@@ -164,7 +195,12 @@ define(['jquery'], function($) {
             }
         }
         if (container.length === 0) {
-            console.warn('Container not found for user ID:', userIdNum);
+            // Don't warn if this user isn't in the table (e.g., teachers filtered out).
+            // Only warn if we're trying to render for a user that should be in the table.
+            const rowExists = $('tr[data-userid="' + userIdNum + '"]').length > 0;
+            if (rowExists) {
+                console.warn('Container not found for user ID:', userIdNum, '(row exists but container missing)');
+            }
             return;
         }
         
@@ -202,7 +238,7 @@ define(['jquery'], function($) {
                 peername = 'User ' + peeridNum;
             }
             
-            const badge = $('<span class="peer-badge badge badge-secondary mr-1 mb-1"></span>')
+            const badge = $('<span class="peer-badge badge bg-secondary text-dark me-1 mb-1"></span>')
                 .attr('data-peerid', peeridNum)
                 .css({'display': 'inline-block', 'margin': '2px'});
 
