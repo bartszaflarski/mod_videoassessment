@@ -28,10 +28,8 @@ define(['jquery'], function($) {
         if (field.length > 0) {
             field.val(jsonValue);
         } else {
-            console.error('Hidden field not found! Trying to create one...');
             // Create the hidden field if it doesn't exist.
             $('form.mform').append('<input type="hidden" name="peerassignments" id="id_peerassignments" value="' + jsonValue.replace(/"/g, '&quot;') + '">');
-            console.log('Created hidden field with value:', jsonValue);
         }
     }
 
@@ -52,7 +50,6 @@ define(['jquery'], function($) {
      * @param {number} peerid - The peer ID to add
      */
     function addPeer(userid, peerid) {
-        console.log('Adding peer:', peerid, 'to user:', userid);
         if (!peerAssignments[userid]) {
             peerAssignments[userid] = [];
         }
@@ -60,7 +57,6 @@ define(['jquery'], function($) {
         // Check if we've reached the maximum number of peers.
         const maxPeers = getMaxPeers();
         if (maxPeers > 0 && peerAssignments[userid].length >= maxPeers) {
-            console.log('Maximum peers reached for user:', userid, '(limit:', maxPeers, ')');
             return; // Don't add more peers.
         }
 
@@ -68,7 +64,6 @@ define(['jquery'], function($) {
             peerAssignments[userid].push(peerid);
         }
 
-        console.log('Current peerAssignments:', peerAssignments);
         renderPeersForUser(userid);
         updateHiddenField();
     }
@@ -80,13 +75,10 @@ define(['jquery'], function($) {
      * @param {number} peerid - The peer ID to remove
      */
     function removePeer(userid, peerid) {
-        console.log('removePeer: userid:', userid, 'peerid:', peerid, 'peerAssignments:', peerAssignments);
-        
         // Try multiple key formats to find the user's peer assignments.
         const userPeers = peerAssignments[userid] || peerAssignments[parseInt(userid)] || peerAssignments[String(userid)] || [];
         
         if (!Array.isArray(userPeers) || userPeers.length === 0) {
-            console.log('No peers found for user:', userid);
             return;
         }
         
@@ -113,9 +105,6 @@ define(['jquery'], function($) {
             // Use the correct key format to update.
             const key = peerAssignments[userid] ? userid : (peerAssignments[parseInt(userid)] ? parseInt(userid) : String(userid));
             peerAssignments[key].splice(index, 1);
-            console.log('Peer removed successfully. Updated peerAssignments:', peerAssignments);
-        } else {
-            console.warn('Peer not found in array. userPeers:', userPeers, 'peerid:', peerid, 'peeridNum:', peeridNum, 'peeridStr:', peeridStr);
         }
 
         renderPeersForUser(userid);
@@ -127,9 +116,7 @@ define(['jquery'], function($) {
      * This ensures teachers and all users get re-rendered after any operation.
      */
     function renderAllUsersInTable() {
-        console.log('renderAllUsersInTable: Rendering all users in table...');
         const tableRows = $('tr[data-userid]');
-        console.log('Found', tableRows.length, 'table rows with data-userid');
         
         // Collect all unique user IDs from multiple sources.
         const allUserIds = new Set();
@@ -158,8 +145,6 @@ define(['jquery'], function($) {
             }
         });
         
-        console.log('Rendering badges for', allUserIds.size, 'unique users:', Array.from(allUserIds));
-        
         // Render for all unique user IDs.
         allUserIds.forEach(function(userid) {
             renderPeersForUser(userid);
@@ -175,7 +160,6 @@ define(['jquery'], function($) {
         // Normalize userid to number for consistent lookup.
         const userIdNum = parseInt(userid);
         if (isNaN(userIdNum) || userIdNum <= 0) {
-            console.warn('Invalid user ID in renderPeersForUser:', userid);
             return;
         }
         
@@ -195,12 +179,6 @@ define(['jquery'], function($) {
             }
         }
         if (container.length === 0) {
-            // Don't warn if this user isn't in the table (e.g., teachers filtered out).
-            // Only warn if we're trying to render for a user that should be in the table.
-            const rowExists = $('tr[data-userid="' + userIdNum + '"]').length > 0;
-            if (rowExists) {
-                console.warn('Container not found for user ID:', userIdNum, '(row exists but container missing)');
-            }
             return;
         }
         
@@ -221,7 +199,6 @@ define(['jquery'], function($) {
             // Convert peerid to number for consistent lookup.
             const peeridNum = parseInt(peerid);
             if (isNaN(peeridNum) || peeridNum <= 0) {
-                console.warn('Invalid peer ID:', peerid, 'for user:', userIdNum);
                 return; // Skip invalid peer IDs.
             }
             
@@ -428,7 +405,6 @@ define(['jquery'], function($) {
         // Wait for document to be ready.
         $(function() {
             try {
-                console.log('Peer assignment init called with params:', params);
                 students = params.students || {};
                 allUsers = params.allUsers || params.students || {}; // Fallback to students if allUsers not provided.
                 peerAssignments = params.existingPeers || {};
@@ -469,10 +445,6 @@ define(['jquery'], function($) {
                 });
                 groups = numericGroups;
 
-                console.log('Normalized students:', students);
-                console.log('Normalized allUsers:', allUsers);
-                console.log('Groups:', groups);
-                console.log('Initial peerAssignments:', peerAssignments);
 
                 // Convert peer arrays to have numeric keys and normalize peer IDs.
                 const numericPeers = {};
@@ -494,10 +466,6 @@ define(['jquery'], function($) {
                     }
                 });
                 peerAssignments = numericPeers;
-
-                console.log('After conversion peerAssignments:', peerAssignments);
-                console.log('Students:', students);
-                console.log('allUsers:', allUsers);
 
                 // Collect all user IDs from both peerAssignments and allUsers.
                 // This ensures we render badges for all users in the table.
@@ -525,7 +493,6 @@ define(['jquery'], function($) {
                     renderPeersForUser(userid);
                 });
                 
-                console.log('Rendered peers for', allUserIds.size, 'users');
 
                 // Initialize the hidden field.
                 updateHiddenField();
@@ -577,7 +544,6 @@ define(['jquery'], function($) {
                     e.stopPropagation();
                     const groupIdAttr = $(this).data('groupid');
                     const groupId = parseInt(groupIdAttr);
-                    console.log('Group dropdown item clicked, groupIdAttr:', groupIdAttr, 'groupId:', groupId, 'groups:', groups);
                     if (groupId && !isNaN(groupId)) {
                         assignRandomPeersGroup(groupId);
                         // Close the dropdown manually.
@@ -595,7 +561,6 @@ define(['jquery'], function($) {
                             dropdownBtn.attr('aria-expanded', 'false');
                         }
                     } else {
-                        console.error('Invalid groupId:', groupId, 'from attr:', groupIdAttr);
                         alert('Invalid group selected. Please try again.');
                     }
                 });
@@ -645,9 +610,8 @@ define(['jquery'], function($) {
                     });
                 }
 
-                console.log('Peer assignment initialization complete');
             } catch (error) {
-                console.error('Error initializing peer assignment:', error);
+                // Error initializing peer assignment.
             }
         });
     }
