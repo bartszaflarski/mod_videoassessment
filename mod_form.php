@@ -1028,42 +1028,17 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         $groups = groups_get_all_groups($COURSE->id);
         $groupdata = [];
         foreach ($groups as $group) {
-            // Get only students from each group (filter out teachers).
+            // Get all members from each group (including teachers).
             $groupmembers = [];
             $namefieldsql = \core_user\fields::for_name()->get_sql('u', false, '', '', false);
             $userfields = 'u.id, ' . $namefieldsql->selects;
             $allmembers = groups_get_members($group->id, $userfields);
-
-            // Filter to only include students (same logic as get_students_only).
-            $coursecontext = \context_course::instance($COURSE->id);
-            $studentrole = $DB->get_record('role', ['shortname' => 'student'], 'id');
-            if ($studentrole) {
-                $excluderoles = $DB->get_records_select(
-                    'role',
-                    "shortname IN ('teacher', 'editingteacher', 'manager', 'coursecreator')",
-                    null,
-                    '',
-                    'id'
-                );
-                $excluderoleids = array_keys($excluderoles);
-
-                foreach ($allmembers as $member) {
-                    $hasstudentrole = user_has_role_assignment($member->id, $studentrole->id, $coursecontext->id);
-                    $hasexcludedrole = false;
-                    if (!empty($excluderoleids)) {
-                        foreach ($excluderoleids as $roleid) {
-                            if (user_has_role_assignment($member->id, $roleid, $coursecontext->id)) {
-                                $hasexcludedrole = true;
-                                break;
-                            }
-                        }
-                    }
-                    if ($hasstudentrole && !$hasexcludedrole) {
-                        $groupmembers[] = $member->id;
-                    }
-                }
+            
+            // Include all group members (students and teachers).
+            foreach ($allmembers as $member) {
+                $groupmembers[] = $member->id;
             }
-
+            
             if (!empty($groupmembers)) {
                 $groupdata[$group->id] = [
                     'name' => $group->name,
@@ -1072,10 +1047,33 @@ class mod_videoassessment_mod_form extends moodleform_mod {
             }
         }
 
-        // Build allUsers data (only students, no teachers).
+        // Build allUsers data (students + teachers from groups).
+        // First, collect all user IDs from groups (including teachers).
+        $allgroupuserids = [];
+        foreach ($groupdata as $group) {
+            foreach ($group['members'] as $memberid) {
+                $allgroupuserids[$memberid] = $memberid;
+            }
+        }
+        
+        // Get user data for all group members (including teachers).
         $allusersdata = [];
+        // Start with students.
         foreach ($allusers as $user) {
             $allusersdata[$user->id] = fullname($user);
+        }
+        // Add teachers from groups.
+        if (!empty($allgroupuserids)) {
+            // Get user records with all name fields.
+            // get_records_list doesn't use table alias, so we need field names without 'u.' prefix.
+            $namefields = \core_user\fields::for_name()->get_required_fields();
+            $userfields = 'id, ' . implode(', ', $namefields);
+            $groupusers = $DB->get_records_list('user', 'id', array_values($allgroupuserids), '', $userfields);
+            foreach ($groupusers as $user) {
+                if (!isset($allusersdata[$user->id])) {
+                    $allusersdata[$user->id] = fullname($user);
+                }
+            }
         }
 
         // Use only students for table display.

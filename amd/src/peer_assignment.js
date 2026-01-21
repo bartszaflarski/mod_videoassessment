@@ -367,27 +367,24 @@ define(['jquery'], function($) {
             return;
         }
 
-        // Filter group members to only include students (exclude teachers).
-        const groupMembers = (group.members || []).filter(function(userid) {
-            // Check if this user is in the students object (students only, no teachers).
-            return students[userid] !== undefined || students[String(userid)] !== undefined;
-        });
+        // Include all group members (students and teachers).
+        const groupMembers = group.members || [];
         
-        // Need at least (numPeers + 1) students in the group to assign numPeers peers to each.
+        // Need at least (numPeers + 1) members in the group to assign numPeers peers to each.
         if (groupMembers.length <= numPeers) {
             const maxPossiblePeers = Math.max(0, groupMembers.length - 1);
-            let errorMsg = 'Not enough students in group "' + group.name + '" to assign ' + numPeers + ' peer(s) to each student.';
+            let errorMsg = 'Not enough members in group "' + group.name + '" to assign ' + numPeers + ' peer(s) to each member.';
             if (groupMembers.length > 0) {
-                errorMsg += ' The group has ' + groupMembers.length + ' student(s), so each student can have at most ' + maxPossiblePeers + ' peer(s).';
+                errorMsg += ' The group has ' + groupMembers.length + ' member(s), so each member can have at most ' + maxPossiblePeers + ' peer(s).';
             } else {
-                errorMsg += ' The group has no students.';
+                errorMsg += ' The group has no members.';
             }
             alert(errorMsg);
             return;
         }
 
         // Confirm before proceeding.
-        if (!confirm('This will reset peer assignments for students in "' + group.name + '" and assign ' + numPeers + ' random peer(s) from within the group. Continue?')) {
+        if (!confirm('This will reset peer assignments for all members in "' + group.name + '" and assign ' + numPeers + ' random peer(s) from within the group. Continue?')) {
             return;
         }
 
