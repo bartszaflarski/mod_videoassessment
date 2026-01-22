@@ -705,25 +705,14 @@ function videoassessment_update_calendar($va) {
  * @param int $contextid The context ID of the video assessment
  * @return void
  */
-function videoassessment_auto_duplicate_rubric($contextid) {
+function videoassessment_auto_duplicate_rubric($contextid, $forceupdate = false) {
     global $DB, $CFG, $_SERVER;
     
     require_once($CFG->dirroot . '/grade/grading/lib.php');
     require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
     
-    // Skip auto-duplication if we're on the grading management page.
-    // This includes deletion, selection, and any other rubric management operations.
     $scriptpath = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '';
     $requesturi = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
-    
-    // Check if we're on any grading management page.
-    if (strpos($scriptpath, '/grade/grading/manage.php') !== false || 
-        strpos($requesturi, '/grade/grading/manage.php') !== false ||
-        strpos($scriptpath, '/grade/grading/pick.php') !== false ||
-        strpos($requesturi, '/grade/grading/pick.php') !== false) {
-        // We're on a grading management page - skip auto-duplication to avoid interference.
-        return;
-    }
     
     // Check for deleteform parameter (deletion in progress).
     $deleteform = optional_param('deleteform', null, PARAM_INT);
@@ -731,12 +720,26 @@ function videoassessment_auto_duplicate_rubric($contextid) {
         return; // Don't auto-duplicate during deletion.
     }
     
-    // Check for other grading management actions that might interfere.
-    if (strpos($requesturi, 'action=') !== false) {
-        // Check if it's a grading-related action.
-        $action = optional_param('action', null, PARAM_ALPHA);
-        if (in_array($action, ['delete', 'edit', 'copy', 'duplicate', 'pick'])) {
-            return; // Skip auto-duplication during grading management actions.
+    // If forceupdate is true, we're being called after template selection - allow execution.
+    // Otherwise, skip auto-duplication if we're on the grading management page during other operations.
+    if (!$forceupdate) {
+        // Skip auto-duplication if we're on the grading management page.
+        // This includes deletion, selection, and any other rubric management operations.
+        if (strpos($scriptpath, '/grade/grading/manage.php') !== false || 
+            strpos($requesturi, '/grade/grading/manage.php') !== false ||
+            strpos($scriptpath, '/grade/grading/pick.php') !== false ||
+            strpos($requesturi, '/grade/grading/pick.php') !== false) {
+            // We're on a grading management page - skip auto-duplication to avoid interference.
+            return;
+        }
+        
+        // Check for other grading management actions that might interfere.
+        if (strpos($requesturi, 'action=') !== false) {
+            // Check if it's a grading-related action.
+            $action = optional_param('action', null, PARAM_ALPHA);
+            if (in_array($action, ['delete', 'edit', 'copy', 'duplicate', 'pick'])) {
+                return; // Skip auto-duplication during grading management actions.
+            }
         }
     }
     
@@ -834,8 +837,25 @@ function videoassessment_auto_duplicate_rubric($contextid) {
                 'method' => 'rubric'
             ]);
             
-            // Only add to duplication list if no rubric exists or if the existing one is a draft.
-            if (!$targetdefinition || $targetdefinition->status != gradingform_controller::DEFINITION_STATUS_READY) {
+            // If forceupdate is true and source is teacher area, always update self and peer areas.
+            // Also update if teacher rubric is newer than existing self/peer rubrics.
+            $shouldupdate = false;
+            if ($forceupdate && $sourcearea->areaname == 'beforeteacher' && 
+                ($area->areaname == 'beforeself' || $area->areaname == 'beforepeer')) {
+                // Force update self and peer areas when teacher template is selected.
+                $shouldupdate = true;
+            } else if ($sourcearea->areaname == 'beforeteacher' && 
+                       ($area->areaname == 'beforeself' || $area->areaname == 'beforepeer') &&
+                       $targetdefinition && $targetdefinition->status == gradingform_controller::DEFINITION_STATUS_READY) {
+                // Check if teacher rubric is newer than self/peer rubric.
+                if ($sourcedefinition->timemodified > $targetdefinition->timemodified) {
+                    $shouldupdate = true;
+                }
+            } else if (!$targetdefinition || $targetdefinition->status != gradingform_controller::DEFINITION_STATUS_READY) {
+                $shouldupdate = true;
+            }
+            
+            if ($shouldupdate) {
                 $areas_to_duplicate[] = $area;
             }
         }
@@ -913,7 +933,7 @@ function videoassessment_auto_duplicate_rubric($contextid) {
 }
 
 function videoassessment_extend_settings_navigation($settings, navigation_node $videoassessmentnode) {
-    global $PAGE;
+    global $PAGE, $DB;
     $areaname = '';
     if (optional_param('areaid', null, PARAM_INT)) {
         $areaname = videoassessment_get_areaname_by_id(required_param('areaid', PARAM_INT));
@@ -921,11 +941,37 @@ function videoassessment_extend_settings_navigation($settings, navigation_node $
     $hasgrade = videoassessment_check_has_grade($PAGE->cm->instance);
     $areas = videoassessment_get_areas($PAGE->cm->context->id);
     
-    // Auto-duplicate rubric if teacher rubric exists but peer/self/class don't.
-    // Check on grading management pages and after template selection.
-    if (strpos($PAGE->url->get_path(), '/grade/grading/manage.php') !== false ||
-        strpos($PAGE->url->get_path(), '/grade/grading/pick.php') !== false) {
-        videoassessment_auto_duplicate_rubric($PAGE->cm->context->id);
+    // Auto-duplicate rubric ONLY when template is selected and confirmed.
+    // Check if we're on manage.php after template selection (not during deletion or other operations).
+    $deleteform = optional_param('deleteform', null, PARAM_INT);
+    $shareform = optional_param('shareform', null, PARAM_INT);
+    $setmethod = optional_param('setmethod', null, PARAM_ALPHANUMEXT);
+    
+    // Only run if no management actions are in progress and we're on manage.php.
+    if (empty($deleteform) && empty($shareform) && empty($setmethod) && 
+        strpos($PAGE->url->get_path(), '/grade/grading/manage.php') !== false) {
+        $areaid = optional_param('areaid', null, PARAM_INT);
+        if ($areaid) {
+            $area = $DB->get_record('grading_areas', ['id' => $areaid]);
+            // Only duplicate if this is the teacher area.
+            if ($area && $area->areaname == 'beforeteacher') {
+                // Check if definition was just updated (within last 10 seconds) to detect template selection.
+                // This is a narrow window to catch only immediate template selections, not other updates.
+                $definition = $DB->get_record('grading_definitions', [
+                    'areaid' => $areaid,
+                    'method' => 'rubric'
+                ]);
+                if ($definition) {
+                    $recentlyupdated = (time() - $definition->timemodified) < 10;
+                    
+                    // Only duplicate if definition was very recently updated (likely from template selection).
+                    // This prevents interference with deletion or other operations that happen later.
+                    if ($recentlyupdated) {
+                        videoassessment_auto_duplicate_rubric($PAGE->cm->context->id, true);
+                    }
+                }
+            }
+        }
     }
 
     // Build the HTML but don't echo it directly (which would break DOCTYPE).
