@@ -711,27 +711,33 @@ function videoassessment_auto_duplicate_rubric($contextid) {
     require_once($CFG->dirroot . '/grade/grading/lib.php');
     require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
     
-    // Skip auto-duplication if we're in the middle of deleting a rubric.
-    // Check if we're on the grading management page with a delete action.
+    // Skip auto-duplication if we're on the grading management page.
+    // This includes deletion, selection, and any other rubric management operations.
+    $scriptpath = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '';
+    $requesturi = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    
+    // Check if we're on any grading management page.
+    if (strpos($scriptpath, '/grade/grading/manage.php') !== false || 
+        strpos($requesturi, '/grade/grading/manage.php') !== false ||
+        strpos($scriptpath, '/grade/grading/pick.php') !== false ||
+        strpos($requesturi, '/grade/grading/pick.php') !== false) {
+        // We're on a grading management page - skip auto-duplication to avoid interference.
+        return;
+    }
+    
+    // Check for deleteform parameter (deletion in progress).
     $deleteform = optional_param('deleteform', null, PARAM_INT);
-    if (!empty($deleteform)) {
+    if (!empty($deleteform) || strpos($requesturi, 'deleteform=') !== false) {
         return; // Don't auto-duplicate during deletion.
     }
     
-    // Also check if we're on the grading management page (even without deleteform param).
-    // This prevents auto-duplication from running during the deletion process.
-    $scriptpath = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '';
-    $requesturi = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
-    if (strpos($scriptpath, '/grade/grading/manage.php') !== false || 
-        strpos($requesturi, '/grade/grading/manage.php') !== false) {
-        // We're on the grading management page - skip auto-duplication to avoid interference.
-        return;
-    }
-    
-    // Check if there's a deleteform parameter in the URL (could be in REQUEST_URI).
-    if (strpos($requesturi, 'deleteform=') !== false) {
-        // Deletion is in progress - skip auto-duplication.
-        return;
+    // Check for other grading management actions that might interfere.
+    if (strpos($requesturi, 'action=') !== false) {
+        // Check if it's a grading-related action.
+        $action = optional_param('action', null, PARAM_ALPHA);
+        if (in_array($action, ['delete', 'edit', 'copy', 'duplicate', 'pick'])) {
+            return; // Skip auto-duplication during grading management actions.
+        }
     }
     
     // Get all grading areas for this context.
@@ -822,9 +828,16 @@ function videoassessment_auto_duplicate_rubric($contextid) {
         }
         
         if ($needsrubric) {
-            // Always add to duplication list, even if rubric exists.
-            // This ensures that when a template is selected for one area, it updates all areas.
-            $areas_to_duplicate[] = $area;
+            // Check if the target area already has a rubric definition.
+            $targetdefinition = $DB->get_record('grading_definitions', [
+                'areaid' => $area->id,
+                'method' => 'rubric'
+            ]);
+            
+            // Only add to duplication list if no rubric exists or if the existing one is a draft.
+            if (!$targetdefinition || $targetdefinition->status != gradingform_controller::DEFINITION_STATUS_READY) {
+                $areas_to_duplicate[] = $area;
+            }
         }
     }
     

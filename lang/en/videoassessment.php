@@ -562,3 +562,4 @@ $string['defaultcriterionstructure'] = 'Strong introduction, transitions, conclu
 $string['gradingmethod_help'] = 'Choose the advanced grading method that should be used for calculating grades in the given context.
 
 To disable advanced grading and switch back to the default grading mechanism, choose \'Simple direct grading\'.';
+$string['rubricnotcompleted'] = 'Please complete all rubric criteria before submitting.';

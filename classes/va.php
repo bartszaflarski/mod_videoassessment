@@ -1697,7 +1697,9 @@ class va {
         foreach ($this->timings as $timing) {
             $gradingarea = $timing . $gradertype;
             $itemid = null;
-            $itemid = $this->get_grade_item($gradingarea, $user->id);
+            // Use the correct grader for get_grade_item based on gradertype.
+            $graderforitem = ($gradertype == 'self') ? $user->id : $USER->id;
+            $itemid = $this->get_grade_item($gradingarea, $user->id, $graderforitem);
             
             // Try to get the controller - this will auto-duplicate if needed.
             $controller = $rubric->get_available_controller($gradingarea);
@@ -1719,9 +1721,20 @@ class va {
                 if (!isset($mformdata->advancedgradinginstance)) {
                     $mformdata->advancedgradinginstance = new \stdClass();
                 }
+                // Use the correct raterid for get_or_create_instance based on gradertype.
+                $rateridforinstance = ($gradertype == 'self') ? $user->id : $USER->id;
+                
+                // Try to get existing instance first, so we load saved data instead of creating new
+                if ($instanceid == 0) {
+                    $existinginstance = $controller->get_current_instance($rateridforinstance, $itemid);
+                    if ($existinginstance) {
+                        $instanceid = $existinginstance->get_id();
+                    }
+                }
+                
                 $mformdata->advancedgradinginstance->$timing = $controller->get_or_create_instance(
                     $instanceid,
-                    $USER->id,
+                    $rateridforinstance,
                     $itemid
                 );
             } else {
@@ -1744,9 +1757,20 @@ class va {
                                 if (!isset($mformdata->advancedgradinginstance)) {
                                     $mformdata->advancedgradinginstance = new \stdClass();
                                 }
+                                // Use the correct raterid for get_or_create_instance based on gradertype.
+                                $rateridforinstance = ($gradertype == 'self') ? $user->id : $USER->id;
+                                
+                                // Try to get existing instance first, so we load saved data instead of creating new
+                                if ($instanceid == 0) {
+                                    $existinginstance = $controller->get_current_instance($rateridforinstance, $itemid);
+                                    if ($existinginstance) {
+                                        $instanceid = $existinginstance->get_id();
+                                    }
+                                }
+                                
                                 $mformdata->advancedgradinginstance->$timing = $controller->get_or_create_instance(
                                     $instanceid,
-                                    $USER->id,
+                                    $rateridforinstance,
                                     $itemid
                                 );
                             }
@@ -1794,16 +1818,8 @@ class va {
         if ($form->is_cancelled()) {
             $this->view_redirect();
         } else if ($data = $form->get_data($gradertype)) {
-            $gradinginstance = $form->use_advanced_grading();
-            foreach ($this->timings as $timing) {
-                if (!empty($gradinginstance->$timing)) {
-                    $gradingarea = $timing . $this->get_grader_type($data->userid, $gradertype);
-                    $_POST['xgrade' . $timing] = $gradinginstance->$timing->submit_and_get_grade(
-                        $data->{'advancedgrading' . $timing},
-                        $this->get_grade_item($gradingarea, $data->userid)
-                    );
-                }
-            }
+            // The form's get_data() method already calls submit_and_get_grade() for advanced grading
+            // and sets $data->{'xgrade'.$timing}, so we don't need to call it again here.
             $gradertype = $this->get_grader_type($data->userid, $gradertype);
             
             // Determine notify student value and save teacher's preference for subsequent gradings.
@@ -1815,7 +1831,9 @@ class va {
             
             foreach ($this->timings as $timing) {
                 $gradingarea = $timing . $gradertype;
-                $itemid = $this->get_grade_item($gradingarea, $data->userid);
+                // Use the correct grader for get_grade_item based on gradertype.
+                $graderforitem = ($gradertype == 'self') ? $data->userid : $USER->id;
+                $itemid = $this->get_grade_item($gradingarea, $data->userid, $graderforitem);
 
                 if (
                     !($grade = $DB->get_record(
@@ -1832,7 +1850,24 @@ class va {
                 }
                 $grade->isnotifystudent = $notifystudent;
 
-                $grade->grade = $data->{'xgrade' . $timing};
+                // Use the grade from the form data, default to -1 if not set.
+                $grade->grade = $data->{'xgrade' . $timing} ?? -1;
+                
+                // If grade is still -1, try to get it from the grading instance.
+                if ($grade->grade == -1) {
+                    $gradingarea = $timing . $gradertype;
+                    $rubric = new rubric($this, array($gradingarea));
+                    $controller = $rubric->get_available_controller($gradingarea);
+                    if ($controller) {
+                        $instance = $controller->get_current_instance($graderforitem, $itemid);
+                        if ($instance && $instance->get_status() == \gradingform_instance::INSTANCE_STATUS_ACTIVE) {
+                            $instancegrade = $instance->get_grade();
+                            if ($instancegrade !== null && $instancegrade >= 0) {
+                                $grade->grade = $instancegrade;
+                            }
+                        }
+                    }
+                }
                 if (isset($data->{'submissioncomment' . $timing})) {
                     $editorvalue = $data->{'submissioncomment' . $timing};
                     
@@ -2206,7 +2241,29 @@ class va {
                         }
                         $o .= $tmp;
 
-                        $timinggrades[] = \html_writer::tag('span', (int) $gradeitem->grade, array('class' => 'rubrictext-' . $gradertype));
+                        // If grade is -1 or not set, try to get it from the grading instance.
+                        $displaygrade = $gradeitem->grade;
+                        if ($displaygrade == -1 || $displaygrade === null) {
+                            // Try to get the grade from the active grading instance.
+                            $instance = $controller->get_current_instance($gradeitem->grader, $gradeitem->id);
+                            if ($instance && $instance->get_status() == \gradingform_instance::INSTANCE_STATUS_ACTIVE) {
+                                $instancegrade = $instance->get_grade();
+                                if ($instancegrade !== null && $instancegrade >= 0) {
+                                    $displaygrade = $instancegrade;
+                                    // Update the grade in the database for future reference.
+                                    global $DB;
+                                    if ($gradeitem->gradeid) {
+                                        $updategrade = $DB->get_record('videoassessment_grades', array('id' => $gradeitem->gradeid));
+                                        if ($updategrade) {
+                                            $updategrade->grade = $displaygrade;
+                                            $DB->update_record('videoassessment_grades', $updategrade);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        $timinggrades[] = \html_writer::tag('span', (int) $displaygrade, array('class' => 'rubrictext-' . $gradertype));
                     }
                 }
                 $o .= \html_writer::end_tag('div');
@@ -2583,6 +2640,10 @@ class va {
             if (!isset($grades->finalscore)) {
                 $grades->finalscore = 0;
             }
+            // Ensure gradebeforeclass exists (it might be missing in older records).
+            if (!isset($grades->gradebeforeclass)) {
+                $grades->gradebeforeclass = -1;
+            }
             return $grades;
         }
 
@@ -2595,6 +2656,7 @@ class va {
             'gradebeforeteacher' => -1,
             'gradebeforeself' => -1,
             'gradebeforepeer' => -1,
+            'gradebeforeclass' => -1,
             'gradeafterteacher' => -1,
             'gradeafterself' => -1,
             'gradeafterpeer' => -1,
@@ -3598,8 +3660,11 @@ class va {
             $fields = ', vso.sortorder as sortorder';
         }
 
+        // Use GROUP BY to handle duplicate userids from multiple role assignments or enrolments.
+        // For sortorder, use MIN() to get the first sort order value (or NULL if not set).
+        $groupbyfields = str_replace(', vso.sortorder as sortorder', ', MIN(vso.sortorder) as sortorder', $fields);
         $sql = "
-            SELECT vp.userid $fields
+            SELECT vp.userid $groupbyfields
             FROM {videoassessment_peers} vp
             JOIN {user} u ON vp.userid = u.id
             JOIN {role_assignments} ra ON u.id = ra.userid
@@ -3607,7 +3672,8 @@ class va {
             JOIN {enrol} e ON ue.enrolid = e.id
             $join
             WHERE vp.videoassessment = :videoassessment AND vp.peerid = :peerid AND ra.contextid = :contextid
-        " . $where . $order;
+        " . $where . "
+            GROUP BY vp.userid" . $order;
 
         $students = $DB->get_records_sql($sql, $params);
         $peerids = array();

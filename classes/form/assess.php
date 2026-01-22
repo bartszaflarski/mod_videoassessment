@@ -328,6 +328,61 @@ class assess extends \moodleform {
         $cdata = $this->_customdata;
         /* @var $va \mod_videoassessment\va */
         $va = $cdata->va;
+        
+        // Check if advanced grading is being used and validate rubric completeness.
+        // Use the instances that are already set up in the form.
+        $gradinginstances = $this->use_advanced_grading();
+        if ($gradinginstances && is_object($gradinginstances)) {
+            foreach ($va->timings as $timing) {
+                if (!empty($gradinginstances->$timing)) {
+                    $gradinginstance = $gradinginstances->$timing;
+                    
+                    // Check if rubric data was submitted for this timing.
+                    // Try multiple ways to get the grading data - it might be in different formats.
+                    $gradingdata = null;
+                    $fieldname = 'advancedgrading' . $timing;
+                    
+                    // First try from the $data array (from exportValues).
+                    if (isset($data[$fieldname])) {
+                        $gradingdata = $data[$fieldname];
+                    }
+                    
+                    // If not found, try to get it directly from the form element's submit value.
+                    if ($gradingdata === null) {
+                        $element = $this->_form->getElement($fieldname);
+                        if ($element && method_exists($element, 'getSubmitValue')) {
+                            $gradingdata = $element->getSubmitValue();
+                        }
+                    }
+                    
+                    // If still not found, try $_POST directly (as a last resort).
+                    if ($gradingdata === null && isset($_POST[$fieldname])) {
+                        $gradingdata = $_POST[$fieldname];
+                    }
+                    
+                    // Only validate if data was submitted and form is not empty.
+                    // Empty forms are allowed - validation only happens when user tries to submit incomplete data.
+                    if ($gradingdata !== null && is_array($gradingdata) && !$gradinginstance->is_empty_form($gradingdata)) {
+                        // Form has some data - validate that all criteria are graded.
+                        // validate_grading_element returns true if all criteria are properly graded.
+                        $isvalid = $gradinginstance->validate_grading_element($gradingdata);
+                        if (!$isvalid) {
+                            $errorfield = 'advancedgrading' . $timing;
+                            $errormessage = get_string('rubricnotcompleted', 'videoassessment');
+                            $errors[$errorfield] = $errormessage;
+                            // Also set error on the form element directly to ensure it's displayed.
+                            $this->_form->setElementError($errorfield, $errormessage);
+                        }
+                    } else if ($gradingdata !== null && is_array($gradingdata) && $gradinginstance->is_empty_form($gradingdata)) {
+                        // Form is empty - this is allowed, no validation needed.
+                    } else {
+                        // No grading data submitted - this might be an issue, but we'll allow it for now.
+                    }
+                    // If gradingdata is null or form is empty, don't show error - allow empty submission.
+                }
+            }
+        }
+        
         foreach ($va->timings as $timing) {
             if (!empty($data['xgrade'.$timing]) && $va->va->grade > 0) {
                 if (0 > $data['xgrade'.$timing] || $data['xgrade'.$timing] > 100) {
@@ -424,13 +479,136 @@ class assess extends \moodleform {
         }
 
         $gradinginstance = $this->use_advanced_grading();
-        foreach (array('before', 'after') as $timing) {
-            if (!empty($gradinginstance->$timing)) {
-                $gradingarea = $timing.$this->_customdata->va->get_grader_type($data->userid, $gradertype);
-                $data->{'xgrade'.$timing} = $gradinginstance->$timing->submit_and_get_grade(
-                        $data->{'advancedgrading'.$timing},
-                        $this->_customdata->va->get_grade_item($gradingarea, $data->userid)
-                );
+        // Use gradertype from form data (submitted hidden field) first, then customdata, then parameter.
+        // This ensures we use the actual gradertype that was submitted with the form.
+        $formgradertype = null;
+        if (isset($data->gradertype) && !empty($data->gradertype)) {
+            $formgradertype = $data->gradertype;
+        } else if (isset($this->_customdata->gradertype) && !empty($this->_customdata->gradertype)) {
+            $formgradertype = $this->_customdata->gradertype;
+        } else if (!empty($gradertype)) {
+            $formgradertype = $gradertype;
+        }
+        
+        // If we still don't have a gradertype, determine it from the user.
+        if (empty($formgradertype)) {
+            $formgradertype = $this->_customdata->va->get_grader_type($data->userid);
+        }
+        
+        // Iterate over actual timings instead of hardcoded array to ensure we only process timings that exist
+        foreach ($this->_customdata->va->timings as $timing) {
+            // Determine the correct grading area for this timing and gradertype.
+            $gradingarea = $timing . $formgradertype;
+            
+            // Get the controller for this grading area to ensure we have the right instance.
+            $rubric = new \mod_videoassessment\rubric($this->_customdata->va, array($gradingarea));
+            $controller = $rubric->get_available_controller($gradingarea);
+            
+            if ($controller) {
+                // Get or create the correct instance for this grading area and itemid.
+                global $USER;
+                $instanceid = isset($data->advancedgradinginstanceid) ? $data->advancedgradinginstanceid : 0;
+                
+                // Use the correct raterid for get_or_create_instance based on gradertype.
+                $rateridforinstance = ($formgradertype == 'self') ? $data->userid : $USER->id;
+                
+                // Get the grade item ID for this specific grading area with the correct grader.
+                $graderforitem = ($formgradertype == 'self') ? $data->userid : $USER->id;
+                $itemid = $this->_customdata->va->get_grade_item($gradingarea, $data->userid, $graderforitem);
+                
+                // Always get or create an instance for the correct itemid.
+                // This ensures we're using the instance that matches the grading area we're saving to.
+                $correctinstance = $controller->get_or_create_instance($instanceid, $rateridforinstance, $itemid);
+                
+                if ($correctinstance) {
+                    // Submit the grade and get the calculated grade value.
+                    // Try multiple ways to get the grading data - it might be in different formats.
+                    $gradingdata = null;
+                    $fieldname = 'advancedgrading' . $timing;
+                    
+                    // First, try to get it from the form data object (from exportValues).
+                    if (isset($data->{$fieldname})) {
+                        $gradingdata = $data->{$fieldname};
+                    }
+                    
+                    // If not found, try to get it directly from the form element's submit value.
+                    if ($gradingdata === null) {
+                        $element = $this->_form->getElement($fieldname);
+                        if ($element && method_exists($element, 'getSubmitValue')) {
+                            $gradingdata = $element->getSubmitValue();
+                        }
+                    }
+                    
+                    // Fallback to $_POST if not found yet.
+                    if ($gradingdata === null && isset($_POST[$fieldname])) {
+                        $gradingdata = $_POST[$fieldname];
+                    }
+                    
+                    // Also try the raw form data array if available.
+                    if ($gradingdata === null && isset($this->_form->_submitValues[$fieldname])) {
+                        $gradingdata = $this->_form->_submitValues[$fieldname];
+                    }
+                    
+                    // Try to get it from the grading instance's current filling if still not found.
+                    // This handles cases where the form was submitted but the data wasn't properly passed.
+                    if ($gradingdata === null || (is_array($gradingdata) && empty($gradingdata))) {
+                        $currentinstance = $correctinstance->get_current_instance();
+                        if ($currentinstance) {
+                            // Try to get the filling from the current instance.
+                            $filling = $currentinstance->get_rubric_filling();
+                            if (!empty($filling) && isset($filling['criteria']) && !empty($filling['criteria'])) {
+                                // Convert filling to grading data format.
+                                $gradingdata = array('criteria' => array());
+                                foreach ($filling['criteria'] as $criterionid => $criteriondata) {
+                                    if (isset($criteriondata['levelid'])) {
+                                        $gradingdata['criteria'][$criterionid] = array('levelid' => $criteriondata['levelid']);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Ensure we have an array.
+                    if (!is_array($gradingdata)) {
+                        $gradingdata = array();
+                    }
+                    
+                    // Submit the grade using the instance and the correct itemid for this grading area.
+                    // Note: submit_and_get_grade() will save the grading data to the instance and return the calculated grade.
+                    // If the form is incomplete, it may return -1, but the instance will still be updated.
+                    $calculatedgrade = $correctinstance->submit_and_get_grade(
+                        $gradingdata,
+                        $itemid
+                    );
+                    
+                    // Always try to get the grade from the instance after submission, even if submit_and_get_grade returned -1.
+                    // This ensures we get the correct grade if the instance was updated.
+                    $reloadedinstance = $controller->get_current_instance($rateridforinstance, $itemid);
+                    if ($reloadedinstance) {
+                        $instancestatus = $reloadedinstance->get_status();
+                        // If instance is active, try to get the grade from it.
+                        if ($instancestatus == \gradingform_instance::INSTANCE_STATUS_ACTIVE) {
+                            $instancegrade = $reloadedinstance->get_grade();
+                            // Use the instance grade if it's valid (>= 0), otherwise use the calculated grade.
+                            if ($instancegrade !== null && $instancegrade >= 0) {
+                                $calculatedgrade = $instancegrade;
+                            }
+                        } else if ($instancestatus == \gradingform_instance::INSTANCE_STATUS_INCOMPLETE && !empty($gradingdata)) {
+                            // Even if incomplete, try to get the grade if we have data.
+                            $instancegrade = $reloadedinstance->get_grade();
+                            if ($instancegrade !== null && $instancegrade >= 0) {
+                                $calculatedgrade = $instancegrade;
+                            }
+                        }
+                    }
+                    
+                    $data->{'xgrade'.$timing} = $calculatedgrade;
+                } else {
+                    $data->{'xgrade'.$timing} = -1;
+                }
+            } else {
+                // No controller available - set grade to -1 (no grade).
+                $data->{'xgrade'.$timing} = -1;
             }
         }
 
