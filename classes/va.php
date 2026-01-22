@@ -1724,8 +1724,8 @@ class va {
                 // Use the correct raterid for get_or_create_instance based on gradertype.
                 $rateridforinstance = ($gradertype == 'self') ? $user->id : $USER->id;
                 
-                // Try to get existing instance first, so we load saved data instead of creating new
-                if ($instanceid == 0) {
+                // If instanceid is 0, try to get existing instance first to load saved data
+                if ($instanceid == 0 && $itemid) {
                     $existinginstance = $controller->get_current_instance($rateridforinstance, $itemid);
                     if ($existinginstance) {
                         $instanceid = $existinginstance->get_id();
@@ -1759,15 +1759,6 @@ class va {
                                 }
                                 // Use the correct raterid for get_or_create_instance based on gradertype.
                                 $rateridforinstance = ($gradertype == 'self') ? $user->id : $USER->id;
-                                
-                                // Try to get existing instance first, so we load saved data instead of creating new
-                                if ($instanceid == 0) {
-                                    $existinginstance = $controller->get_current_instance($rateridforinstance, $itemid);
-                                    if ($existinginstance) {
-                                        $instanceid = $existinginstance->get_id();
-                                    }
-                                }
-                                
                                 $mformdata->advancedgradinginstance->$timing = $controller->get_or_create_instance(
                                     $instanceid,
                                     $rateridforinstance,
