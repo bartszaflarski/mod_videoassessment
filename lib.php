@@ -94,15 +94,50 @@ function videoassessment_add_instance($va, $form) {
     }
 
     // Check if "Save and create rubric" button was clicked.
-    // Check both the form data and $_POST since submit button values may not be in $va.
-    $rubricbuttonclicked = !empty($va->redirect_to_rubric) || 
-                           !empty($va->submitbutton_rubric) || 
-                           isset($_POST['submitbutton_rubric']) ||
-                           (isset($_POST['redirect_to_rubric']) && $_POST['redirect_to_rubric'] == '1');
+    // Be EXTREMELY strict - only set preference if redirect_to_rubric is explicitly set to '1' or 1.
+    // Do NOT check for submitbutton_rubric as that might be set incorrectly.
+    // Only rely on the redirect_to_rubric hidden field which is set by JavaScript when the rubric button is clicked.
+    $rubricbuttonclicked = false;
+    
+    // Check $_POST first (most reliable for form submissions).
+    if (!empty($_POST['redirect_to_rubric']) && ($_POST['redirect_to_rubric'] == '1' || $_POST['redirect_to_rubric'] == 1)) {
+        $rubricbuttonclicked = true;
+    } else if (!empty($va->redirect_to_rubric) && ($va->redirect_to_rubric == '1' || $va->redirect_to_rubric == 1)) {
+        $rubricbuttonclicked = true;
+    }
+    // Explicitly DO NOT check for submitbutton_rubric to avoid false positives.
+    
+    // IMPORTANT: If rubric button was NOT clicked, clear advanced grading method fields
+    // to prevent Moodle core from redirecting to grading management page.
+    // Moodle core redirects when advanced grading method is set but no form exists.
+    if (!$rubricbuttonclicked) {
+        // Clear all advancedgradingmethod_* fields from the data that will be processed by Moodle core.
+        // This prevents unwanted redirects when user clicks "Save and display".
+        foreach ($va as $key => $value) {
+            if (strpos($key, 'advancedgradingmethod_') === 0) {
+                unset($va->$key);
+            }
+        }
+        // Also clear from $_POST to ensure Moodle core doesn't see them.
+        foreach ($_POST as $key => $value) {
+            if (strpos($key, 'advancedgradingmethod_') === 0) {
+                unset($_POST[$key]);
+            }
+        }
+    }
     
     if ($rubricbuttonclicked) {
-        // Use user preference instead of session to avoid "session mutated after closed" error.
-        set_user_preference('videoassessment_redirect_to_grading', $va->id);
+        // Use user preference with timestamp to avoid "session mutated after closed" error.
+        // Store timestamp to ensure redirect only happens if preference is recent.
+        $prefvalue = $va->id . ':' . time();
+        set_user_preference('videoassessment_redirect_to_grading', $prefvalue);
+    } else {
+        // Explicitly clear any existing preference if rubric button was NOT clicked.
+        // This prevents stale preferences from causing unwanted redirects.
+        $existing_pref = get_user_preferences('videoassessment_redirect_to_grading');
+        if (!empty($existing_pref)) {
+            unset_user_preference('videoassessment_redirect_to_grading');
+        }
     }
 
     return $va->id;
@@ -238,13 +273,50 @@ function videoassessment_update_instance($va, $form) {
     }
 
     // Check if "Save and create rubric" button was clicked.
-    $rubricbuttonclicked = !empty($va->redirect_to_rubric) || 
-                           !empty($va->submitbutton_rubric) || 
-                           isset($_POST['submitbutton_rubric']) ||
-                           (isset($_POST['redirect_to_rubric']) && $_POST['redirect_to_rubric'] == '1');
+    // Be EXTREMELY strict - only set preference if redirect_to_rubric is explicitly set to '1' or 1.
+    // Do NOT check for submitbutton_rubric as that might be set incorrectly.
+    // Only rely on the redirect_to_rubric hidden field which is set by JavaScript when the rubric button is clicked.
+    $rubricbuttonclicked = false;
+    
+    // Check $_POST first (most reliable for form submissions).
+    if (!empty($_POST['redirect_to_rubric']) && ($_POST['redirect_to_rubric'] == '1' || $_POST['redirect_to_rubric'] == 1)) {
+        $rubricbuttonclicked = true;
+    } else if (!empty($va->redirect_to_rubric) && ($va->redirect_to_rubric == '1' || $va->redirect_to_rubric == 1)) {
+        $rubricbuttonclicked = true;
+    }
+    // Explicitly DO NOT check for submitbutton_rubric to avoid false positives.
+    
+    // IMPORTANT: If rubric button was NOT clicked, clear advanced grading method fields
+    // to prevent Moodle core from redirecting to grading management page.
+    // Moodle core redirects when advanced grading method is set but no form exists.
+    if (!$rubricbuttonclicked) {
+        // Clear all advancedgradingmethod_* fields from the data that will be processed by Moodle core.
+        // This prevents unwanted redirects when user clicks "Save and display".
+        foreach ($va as $key => $value) {
+            if (strpos($key, 'advancedgradingmethod_') === 0) {
+                unset($va->$key);
+            }
+        }
+        // Also clear from $_POST to ensure Moodle core doesn't see them.
+        foreach ($_POST as $key => $value) {
+            if (strpos($key, 'advancedgradingmethod_') === 0) {
+                unset($_POST[$key]);
+            }
+        }
+    }
+    
     if ($rubricbuttonclicked) {
-        // Use user preference instead of session to avoid "session mutated after closed" error.
-        set_user_preference('videoassessment_redirect_to_grading', $va->id);
+        // Use user preference with timestamp to avoid "session mutated after closed" error.
+        // Store timestamp to ensure redirect only happens if preference is recent.
+        $prefvalue = $va->id . ':' . time();
+        set_user_preference('videoassessment_redirect_to_grading', $prefvalue);
+    } else {
+        // Explicitly clear any existing preference if rubric button was NOT clicked.
+        // This prevents stale preferences from causing unwanted redirects.
+        $existing_pref = get_user_preferences('videoassessment_redirect_to_grading');
+        if (!empty($existing_pref)) {
+            unset_user_preference('videoassessment_redirect_to_grading');
+        }
     }
 
     return true;
@@ -871,7 +943,7 @@ function videoassessment_auto_duplicate_rubric($contextid, $forceupdate = false)
                 'areaid' => $area->id,
                 'method' => 'rubric'
             ]);
-            
+
             // If forceupdate is true (template selection), always update class and teacher areas.
             // Also update if teacher rubric is newer than existing self/peer rubrics.
             $shouldupdate = false;
@@ -991,8 +1063,10 @@ function videoassessment_extend_settings_navigation($settings, navigation_node $
         $areaid = optional_param('areaid', null, PARAM_INT);
         if ($areaid) {
             $area = $DB->get_record('grading_areas', ['id' => $areaid]);
+
             // Trigger auto-duplication for any area when a template is selected.
             if ($area && $area->component == 'mod_videoassessment') {
+
                 // Check if definition was just updated (within last 10 seconds) to detect template selection.
                 // This is a narrow window to catch only immediate template selections, not other updates.
                 $definition = $DB->get_record('grading_definitions', [

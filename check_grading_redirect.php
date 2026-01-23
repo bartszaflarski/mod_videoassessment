@@ -33,8 +33,21 @@ $redirect_to_grading = get_user_preferences('videoassessment_redirect_to_grading
 unset_user_preference('videoassessment_redirect_to_grading');
 
 if (!empty($redirect_to_grading)) {
+    // Parse the preference value: 'id:timestamp' or just 'id' (for backward compatibility).
+    $parts = explode(':', $redirect_to_grading);
+    $vaid = (int)$parts[0];
+    $preftimestamp = isset($parts[1]) ? (int)$parts[1] : 0;
+    
+    // Only redirect if preference was set very recently (within 2 seconds).
+    // This ensures redirects only happen immediately after clicking "Save and create rubric".
+    if ($preftimestamp > 0 && (time() - $preftimestamp) > 2) {
+        // Preference is stale - don't redirect.
+        echo json_encode(['redirect' => false]);
+        exit;
+    }
+    
     // Get the course module for this videoassessment instance.
-    $va = $DB->get_record('videoassessment', ['id' => $redirect_to_grading]);
+    $va = $DB->get_record('videoassessment', ['id' => $vaid]);
     if ($va) {
         $cm = get_coursemodule_from_instance('videoassessment', $va->id, 0, false, MUST_EXIST);
         $context = context_module::instance($cm->id);

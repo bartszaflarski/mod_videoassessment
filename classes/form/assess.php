@@ -328,6 +328,61 @@ class assess extends \moodleform {
         $cdata = $this->_customdata;
         /* @var $va \mod_videoassessment\va */
         $va = $cdata->va;
+        
+        // Check if advanced grading is being used and validate rubric completeness.
+        // Use the instances that are already set up in the form.
+        $gradinginstances = $this->use_advanced_grading();
+        if ($gradinginstances && is_object($gradinginstances)) {
+            foreach ($va->timings as $timing) {
+                if (!empty($gradinginstances->$timing)) {
+                    $gradinginstance = $gradinginstances->$timing;
+                    
+                    // Check if rubric data was submitted for this timing.
+                    // Try multiple ways to get the grading data - it might be in different formats.
+                    $gradingdata = null;
+                    $fieldname = 'advancedgrading' . $timing;
+                    
+                    // First try from the $data array (from exportValues).
+                    if (isset($data[$fieldname])) {
+                        $gradingdata = $data[$fieldname];
+                    }
+                    
+                    // If not found, try to get it directly from the form element's submit value.
+                    if ($gradingdata === null) {
+                        $element = $this->_form->getElement($fieldname);
+                        if ($element && method_exists($element, 'getSubmitValue')) {
+                            $gradingdata = $element->getSubmitValue();
+                        }
+                    }
+                    
+                    // If still not found, try $_POST directly (as a last resort).
+                    if ($gradingdata === null && isset($_POST[$fieldname])) {
+                        $gradingdata = $_POST[$fieldname];
+                    }
+                    
+                    // Only validate if data was submitted and form is not empty.
+                    // Empty forms are allowed - validation only happens when user tries to submit incomplete data.
+                    if ($gradingdata !== null && is_array($gradingdata) && !$gradinginstance->is_empty_form($gradingdata)) {
+                        // Form has some data - validate that all criteria are graded.
+                        // validate_grading_element returns true if all criteria are properly graded.
+                        $isvalid = $gradinginstance->validate_grading_element($gradingdata);
+                        if (!$isvalid) {
+                            $errorfield = 'advancedgrading' . $timing;
+                            $errormessage = get_string('rubricnotcompleted', 'videoassessment');
+                            $errors[$errorfield] = $errormessage;
+                            // Also set error on the form element directly to ensure it's displayed.
+                            $this->_form->setElementError($errorfield, $errormessage);
+                        }
+                    } else if ($gradingdata !== null && is_array($gradingdata) && $gradinginstance->is_empty_form($gradingdata)) {
+                        // Form is empty - this is allowed, no validation needed.
+                    } else {
+                        // No grading data submitted - this might be an issue, but we'll allow it for now.
+                    }
+                    // If gradingdata is null or form is empty, don't show error - allow empty submission.
+                }
+            }
+        }
+        
         foreach ($va->timings as $timing) {
             if (!empty($data['xgrade'.$timing]) && $va->va->grade > 0) {
                 if (0 > $data['xgrade'.$timing] || $data['xgrade'.$timing] > 100) {
@@ -424,12 +479,32 @@ class assess extends \moodleform {
         }
 
         $gradinginstance = $this->use_advanced_grading();
-        foreach (array('before', 'after') as $timing) {
-            if (!empty($gradinginstance->$timing)) {
-                $gradingarea = $timing.$this->_customdata->va->get_grader_type($data->userid, $gradertype);
-                $data->{'xgrade'.$timing} = $gradinginstance->$timing->submit_and_get_grade(
-                        $data->{'advancedgrading'.$timing},
-                        $this->_customdata->va->get_grade_item($gradingarea, $data->userid)
+        // Use gradertype from form data (submitted hidden field) first, then customdata, then parameter.
+        // This ensures we use the actual gradertype that was submitted with the form.
+        $formgradertype = null;
+        if (isset($data->gradertype) && !empty($data->gradertype)) {
+            $formgradertype = $data->gradertype;
+        } else if (isset($this->_customdata->gradertype) && !empty($this->_customdata->gradertype)) {
+            $formgradertype = $this->_customdata->gradertype;
+        } else if (!empty($gradertype)) {
+            $formgradertype = $gradertype;
+        }
+        
+        // If we still don't have a gradertype, determine it from the user.
+        if (empty($formgradertype)) {
+            $formgradertype = $this->_customdata->va->get_grader_type($data->userid);
+        }
+        
+        // Use the grading instances that were already set up in the form definition
+        $gradinginstances = $this->use_advanced_grading();
+        
+        // Only process timings that actually exist in the form (fix for first assessment grade issue)
+        foreach ($this->_customdata->va->timings as $timing) {
+            if (!empty($gradinginstances) && is_object($gradinginstances) && !empty($gradinginstances->$timing)) {
+                $gradingarea = $timing . $this->_customdata->va->get_grader_type($data->userid, $gradertype);
+                $data->{'xgrade'.$timing} = $gradinginstances->$timing->submit_and_get_grade(
+                    $data->{'advancedgrading'.$timing},
+                    $this->_customdata->va->get_grade_item($gradingarea, $data->userid)
                 );
             }
         }

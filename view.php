@@ -173,14 +173,44 @@ if ($action == "") {
 $context = context_module::instance($cm->id);
 require_capability('mod/videoassessment:view', $context);
 
-// Check if we need to redirect to grading page (from "Save and create rubric" button).
-// This must be checked BEFORE clearing the preference.
-global $CFG;
+// DISABLED: Redirect logic moved to be more strict and only triggered via explicit user preference.
+// The redirect to grading should ONLY happen when "Save and create rubric" button is clicked,
+// which sets a user preference with a timestamp. This check is now done server-side only in lib.php
+// during add_instance/update_instance, and the preference is cleared immediately after redirect.
+// 
+// Clear any stale preferences as a safety measure to prevent unwanted redirects.
 $redirect_to_grading = get_user_preferences('videoassessment_redirect_to_grading');
 if (!empty($redirect_to_grading)) {
-    // Verify this is for the current activity instance.
-    $va = $DB->get_record('videoassessment', ['id' => $redirect_to_grading]);
-    if ($va && $va->id == $cm->instance) {
+    // Parse the preference value: 'id:timestamp' or just 'id' (for backward compatibility).
+    $parts = explode(':', $redirect_to_grading);
+    $vaid = (int)$parts[0];
+    $preftimestamp = isset($parts[1]) ? (int)$parts[1] : 0;
+    
+    // Check if we're coming from modedit.php (activity creation/editing).
+    $isfrommodedit = isset($_SERVER['HTTP_REFERER']) && 
+        (strpos($_SERVER['HTTP_REFERER'], '/course/modedit.php') !== false ||
+         strpos($_SERVER['HTTP_REFERER'], '/mod/videoassessment/modedit.php') !== false);
+    
+    // Only redirect if ALL of these conditions are met:
+    // 1. Coming from modedit.php (activity creation/editing)
+    // 2. Preference was set very recently (within 0.5 seconds - extremely strict)
+    // 3. Preference ID matches current activity instance
+    // 4. Preference has a valid timestamp
+    $should_redirect = false;
+    if ($isfrommodedit && $preftimestamp > 0) {
+        $recent = (time() - $preftimestamp) <= 0.5; // 0.5 second window - extremely strict
+        $matchesactivity = ($vaid == $cm->instance);
+        
+        if ($recent && $matchesactivity) {
+            // Double-check: verify the activity exists and matches
+            $va = $DB->get_record('videoassessment', ['id' => $vaid]);
+            if ($va && $va->id == $cm->instance) {
+                $should_redirect = true;
+            }
+        }
+    }
+    
+    if ($should_redirect) {
         // Clear the preference immediately to prevent redirect loops.
         unset_user_preference('videoassessment_redirect_to_grading');
         
@@ -209,7 +239,14 @@ if (!empty($redirect_to_grading)) {
             redirect(new moodle_url('/grade/grading/manage.php', ['areaid' => $arearecord->id]));
         }
     } else {
-        // Not for this activity, clear the preference.
+        // Don't redirect - clear the preference to prevent future issues.
+        unset_user_preference('videoassessment_redirect_to_grading');
+    }
+} else {
+    // No preference found - ensure any stale preferences are cleared.
+    // This is a safety measure to prevent issues from previous activity creations.
+    $stale_pref = get_user_preferences('videoassessment_redirect_to_grading');
+    if (!empty($stale_pref)) {
         unset_user_preference('videoassessment_redirect_to_grading');
     }
 }
