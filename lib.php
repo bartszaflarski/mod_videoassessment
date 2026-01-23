@@ -992,9 +992,11 @@ function videoassessment_cm_info_view(cm_info $cm) {
         $checkUrl = $CFG->wwwroot . '/mod/videoassessment/check_grading_redirect.php';
         $inlineJs = "
             (function() {
-                // Don't redirect if we're already on the grading management page.
+                // Don't redirect if we're already on the grading management page or any grading-related page.
                 var currentUrl = window.location.href;
-                if (currentUrl.indexOf('/grade/grading/manage.php') !== -1) {
+                if (currentUrl.indexOf('/grade/grading/') !== -1 || 
+                    currentUrl.indexOf('/grade/grading/form/') !== -1 ||
+                    currentUrl.indexOf('/grade/grading/pick.php') !== -1) {
                     // Clear redirect flag when already on grading page.
                     sessionStorage.removeItem('videoassessment_check_grading_redirect');
                     return;

@@ -39,6 +39,11 @@ define(['jquery'], function($) {
             // Clear any pending redirect flags when on the grading page.
             // This prevents redirects when navigating away from this page.
             sessionStorage.removeItem('videoassessment_check_grading_redirect');
+            // Also clear processed tokens to prevent any redirect logic from running.
+            sessionStorage.removeItem('videoassessment_processed_tokens');
+            
+            // Prevent any click handlers from triggering redirects on this page.
+            $(document).off('click.videoassessment-redirect');
             
             function changeHeading() {
                 // Find the heading element.

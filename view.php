@@ -215,9 +215,16 @@ if (!empty($redirect_to_grading)) {
 }
 
 // Clear sessionStorage flag if it exists (for cleanup).
+// Also clear it on any grading-related pages to prevent redirects.
 $PAGE->requires->js_amd_inline("
     require(['jquery'], function(\$) {
-        sessionStorage.removeItem('videoassessment_check_grading_redirect');
+        var currentUrl = window.location.href;
+        // Clear redirect flags on grading pages or activity view pages.
+        if (currentUrl.indexOf('/grade/grading/') !== -1 || 
+            currentUrl.indexOf('/mod/videoassessment/view.php') !== -1) {
+            sessionStorage.removeItem('videoassessment_check_grading_redirect');
+            sessionStorage.removeItem('videoassessment_processed_tokens');
+        }
     });
 ");
 
