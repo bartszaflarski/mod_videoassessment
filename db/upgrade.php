@@ -1089,6 +1089,24 @@ function xmldb_videoassessment_upgrade($oldversion = 0) {
         upgrade_mod_savepoint(true, 2025120811, 'videoassessment');
     }
 
+    // Ensure gradepass fields are added (2025120815)
+    if ($oldversion < 2025120815) {
+        $table = new xmldb_table('videoassessment');
+
+        // Add gradepass field if it doesn't exist
+        $field = new xmldb_field('gradepass', XMLDB_TYPE_INTEGER, 10, null, XMLDB_NOTNULL, null, 0);
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Add gradepass_videoassessment field if it doesn't exist
+        $field = new xmldb_field('gradepass_videoassessment', XMLDB_TYPE_INTEGER, 10, null, XMLDB_NOTNULL, null, 0);
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        upgrade_mod_savepoint(true, 2025120815, 'videoassessment');
+    }
 
     return true;
 }

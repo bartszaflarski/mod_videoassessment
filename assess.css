@@ -96,11 +96,6 @@
  .side-pre-only #page-content #region-main {
    margin-left: 0 !important;
  }
- #page-footer{
-   float:none !important;
-   width:auto !important;
-   padding-left: 430px;
- }
  .side-pre-only #page-content #region-pre{
    display:none;
  }

@@ -150,6 +150,9 @@ define(['jquery', 'core/str'], function ($, str) {
                 return result;
             }
 
+            // Store the video container's original position for scrolling back
+            var videoOriginalPosition = null;
+
             function getVideoContainer() {
                 var $container = $('.assess-form-videos, .path-mod-videoassessment .assess-form-videos');
                 console.log('[VideoAssessment] getVideoContainer() found:', $container.length, 'elements');
@@ -164,6 +167,12 @@ define(['jquery', 'core/str'], function ($, str) {
                     var $videoContainer = getVideoContainer();
                     console.log('hideVideo called, container found:', $videoContainer.length);
                     if ($videoContainer.length > 0) {
+                        // Store the video container's position before hiding
+                        var offset = $videoContainer.offset();
+                        if (offset) {
+                            videoOriginalPosition = offset.top;
+                            console.log('Stored video position:', videoOriginalPosition);
+                        }
                         $videoContainer.css('display', 'none');
                         console.log('Video hidden');
                     }
@@ -178,6 +187,19 @@ define(['jquery', 'core/str'], function ($, str) {
                     if ($videoContainer.length > 0) {
                         $videoContainer.css('display', '');
                         console.log('Video shown');
+                        
+                        // Scroll back to the video's original position if we stored it
+                        if (videoOriginalPosition !== null) {
+                            console.log('Scrolling back to video position:', videoOriginalPosition);
+                            // Use smooth scroll to the stored position
+                            $('html, body').animate({
+                                scrollTop: videoOriginalPosition - 10 // Small offset for better visibility
+                            }, 300, function() {
+                                console.log('Scrolled back to video position');
+                            });
+                            // Reset the stored position
+                            videoOriginalPosition = null;
+                        }
                     }
                 }
             }
@@ -223,6 +245,7 @@ define(['jquery', 'core/str'], function ($, str) {
                 }
                 
                 // Handle focus/blur on remark textareas.
+                // Mobile: Hide video when textarea is focused, show when blurred.
                 $remarkTextareas.off('focus.videoassessment blur.videoassessment').on('focus.videoassessment', function() {
                     console.log('[VideoAssessment] Remark textarea focused via direct handler, hiding video');
                     hideVideo();
@@ -283,6 +306,7 @@ define(['jquery', 'core/str'], function ($, str) {
 
             // Simple, direct event delegation for rubric remark textareas - catches all clicks/focus events.
             // This works even if elements are initialized dynamically.
+            // Mobile: Hide video when textarea is clicked/focused.
             $(document).on('click.videoassessment-remark focus.videoassessment-remark', function(e) {
                 console.log('[VideoAssessment] Document click/focus event:', {
                     type: e.type,
@@ -362,7 +386,8 @@ define(['jquery', 'core/str'], function ($, str) {
                             className: this.className
                         });
                         
-                        $textarea.off('click.videoassessment-direct focus.videoassessment-direct')
+                        // Mobile: Hide video when textarea is clicked/focused.
+                        $textarea.off('click.videoassessment-direct focus.videoassessment-direct blur.videoassessment-direct')
                                  .on('click.videoassessment-direct', function() {
                                      console.log('[VideoAssessment] DIRECT HANDLER: Remark textarea clicked!');
                                      hideVideo();

@@ -609,7 +609,7 @@ class mod_videoassessment_mod_form extends moodleform_mod {
         // Automatic File Deletion at Course End Date
         // =====================================================================
         $mform->addElement('selectyesno', 'autodeletefiles', get_string('autodeletefiles', 'videoassessment'));
-        $mform->setDefault('autodeletefiles', 0);
+        $mform->setDefault('autodeletefiles', 1);
         $mform->addHelpButton('autodeletefiles', 'autodeletefiles', 'videoassessment');
 
         // Bulk upload videos and related management links (only for existing activities).
@@ -1298,18 +1298,64 @@ class mod_videoassessment_mod_form extends moodleform_mod {
     public function get_data() {
         $data = parent::get_data();
 
-        if ($data && !empty($this->current->_advancedgradingdata['areas'])) {
-            // Get all area names.
-            $areas = array_keys($this->current->_advancedgradingdata['areas']);
+        // DEBUG: Dump form data to see what's being submitted
+        if ($data) {
+            error_log('=== VIDEOASSESSMENT FORM get_data() DEBUG ===');
+            error_log('gradepass in data: ' . var_export(property_exists($data, 'gradepass') ? $data->gradepass : 'NOT SET', true));
+            error_log('$_POST[gradepass]: ' . var_export(isset($_POST['gradepass']) ? $_POST['gradepass'] : 'NOT SET', true));
+            error_log('Full data object keys: ' . implode(', ', array_keys((array)$data)));
+            if (property_exists($data, 'gradepass')) {
+                error_log('gradepass type: ' . gettype($data->gradepass));
+                error_log('gradepass value: ' . var_export($data->gradepass, true));
+            }
+            error_log('=== END DEBUG ===');
+        } else {
+            error_log('=== VIDEOASSESSMENT FORM get_data() DEBUG: data is NULL ===');
+        }
 
-            if (count($areas) > 1) {
-                // Get the value from the first (visible) selector.
-                $firstareaname = $areas[0];
-                $selectedmethod = $data->{'advancedgradingmethod_' . $firstareaname} ?? '';
+        if ($data) {
+            // Process gradepass field - Moodle parent processes 'gradepass' with unformat_float(),
+            // but we need to ensure it's properly set (default to 0 if empty).
+            // For itemnumber 0 (which maps to 'grading'), the field name is just 'gradepass'.
+            // Always ensure gradepass is set and is numeric (never null or empty string)
+            // Parent processes 'gradepass' with unformat_float(), but we need to ensure it's always set
+            if (property_exists($data, 'gradepass')) {
+                // Parent already processed it with unformat_float(), but ensure it's not empty/null
+                if ($data->gradepass === '' || $data->gradepass === null) {
+                    $data->gradepass = 0;
+                } else {
+                    // Ensure it's a numeric value
+                    $data->gradepass = (float)$data->gradepass;
+                }
+            } else {
+                // Field doesn't exist in data (form field was empty/not submitted), set default to 0
+                $data->gradepass = 0;
+            }
+            
+            // Final safety check - ensure it's always numeric, never null
+            $data->gradepass = (float)$data->gradepass;
+            if ($data->gradepass < 0) {
+                $data->gradepass = 0;
+            }
+            
+            // DEBUG: Log after processing
+            error_log('=== AFTER PROCESSING ===');
+            error_log('gradepass final value: ' . var_export($data->gradepass, true));
+            error_log('gradepass final type: ' . gettype($data->gradepass));
 
-                // Sync all other areas to the same method.
-                foreach ($areas as $areaname) {
-                    $data->{'advancedgradingmethod_' . $areaname} = $selectedmethod;
+            if (!empty($this->current->_advancedgradingdata['areas'])) {
+                // Get all area names.
+                $areas = array_keys($this->current->_advancedgradingdata['areas']);
+
+                if (count($areas) > 1) {
+                    // Get the value from the first (visible) selector.
+                    $firstareaname = $areas[0];
+                    $selectedmethod = $data->{'advancedgradingmethod_' . $firstareaname} ?? '';
+
+                    // Sync all other areas to the same method.
+                    foreach ($areas as $areaname) {
+                        $data->{'advancedgradingmethod_' . $areaname} = $selectedmethod;
+                    }
                 }
             }
         }
