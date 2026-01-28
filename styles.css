@@ -326,3 +326,97 @@
 .path-mod-videoassessment body.dragging, body.dragging * {
     cursor: move !important;
 }
+
+/* Advanced Grading Template Buttons */
+.template-actions .action {
+    display: inline-block;
+    padding: 8px 16px;
+    margin: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    color: #333;
+    text-decoration: none;
+    font-weight: normal;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.template-actions .action:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    text-decoration: none;
+    color: #333;
+}
+
+.template-actions .action:active {
+    background-color: #dee2e6;
+    border-color: #adb5bd;
+}
+
+.template-actions .action.pick.template {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: #fff;
+}
+
+.template-actions .action.pick.template:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+    color: #fff;
+}
+
+.template-actions .action.pick.template img,
+.template-actions .action.pick.template img[src*="valid"],
+.template-actions .action.pick img,
+.template-actions .action.pick.template svg,
+.template-actions .action.pick svg {
+    filter: brightness(0) invert(1) !important;
+    -webkit-filter: brightness(0) invert(1) !important;
+}
+
+.template-actions .action.pick.template svg path,
+.template-actions .action.pick svg path {
+    fill: #fff !important;
+    stroke: #fff !important;
+}
+
+.template-actions .action.remove {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.template-actions .action.remove:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+    color: #fff;
+}
+
+.template-actions .action.remove img,
+.template-actions .action.remove img[src*="delete"],
+.template-actions .action.remove img[src*="t/delete"],
+.template-actions .action.remove svg {
+    filter: brightness(0) invert(1) !important;
+    -webkit-filter: brightness(0) invert(1) !important;
+}
+
+.template-actions .action.remove svg path {
+    fill: #fff !important;
+    stroke: #fff !important;
+}
+
+.template-actions .action img {
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+.template-actions .action .action-text {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+#page-grade-grading-pick .text-success {
+    --bs-text-opacity: 1;
+    color: white;
+}

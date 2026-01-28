@@ -1508,9 +1508,6 @@ class va {
                     return width <= 768 && isPortrait;
                 }
                 
-                // Store the video container's original position for scrolling back
-                var videoOriginalPosition = null;
-                
                 // Get video container
                 function getVideoContainer() {
                     return \$('.assess-form-videos, .path-mod-videoassessment .assess-form-videos');
@@ -1522,12 +1519,6 @@ class va {
                         var \$container = getVideoContainer();
                         console.log('[VideoAssessment] Hiding video, containers found:', \$container.length);
                         if (\$container.length > 0) {
-                            // Store the video container's position before hiding
-                            var offset = \$container.offset();
-                            if (offset) {
-                                videoOriginalPosition = offset.top;
-                                console.log('[VideoAssessment] Stored video position:', videoOriginalPosition);
-                            }
                             \$container.fadeOut(300);
                         }
                     }
@@ -1537,19 +1528,7 @@ class va {
                     if (isMobile()) {
                         var \$container = getVideoContainer();
                         if (\$container.length > 0) {
-                            \$container.fadeIn(300, function() {
-                                // After fade in completes, scroll back to the video's original position
-                                if (videoOriginalPosition !== null) {
-                                    console.log('[VideoAssessment] Scrolling back to video position:', videoOriginalPosition);
-                                    \$('html, body').animate({
-                                        scrollTop: videoOriginalPosition - 10 // Small offset for better visibility
-                                    }, 300, function() {
-                                        console.log('[VideoAssessment] Scrolled back to video position');
-                                    });
-                                    // Reset the stored position
-                                    videoOriginalPosition = null;
-                                }
-                            });
+                            \$container.fadeIn(300);
                         }
                     }
                 }

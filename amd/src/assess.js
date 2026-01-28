@@ -67,22 +67,6 @@ define(['jquery', 'core/str'], function ($, str) {
                 $("#fitem_id_advancedgradingbefore").find(".remark").attr('style', "min-width: 150px !important;");
             }
 
-            $(window).scroll(function () {
-                var $video = $('.assess-form-videos > .video-wrap');
-                if ($video.parent().offset()) {
-                    var $video_top = $video.parent().offset().top;
-                    var $video_height = $video.height();
-                    var $form = $('.path-mod-videoassessment .gradingform');
-                    var $scroll_form = $form.offset().top + $form.height();
-
-                    if ($(this).scrollTop() >= ($video_top - 62) && $(this).scrollTop() < ($scroll_form - $video_height - 62)) {
-                        var $padding = $(this).scrollTop() - $video_top + 62;
-                        $video.css({ 'padding-top': $padding });
-                    } else if ($(this).scrollTop() < ($video_top - 62)) {
-                        $video.css({ 'padding-top': 0 });
-                    }
-                }
-            });
 
             // Handle YouTube iframes on mobile devices.
             $('iframe').each(function() {
@@ -150,9 +134,6 @@ define(['jquery', 'core/str'], function ($, str) {
                 return result;
             }
 
-            // Store the video container's original position for scrolling back
-            var videoOriginalPosition = null;
-
             function getVideoContainer() {
                 var $container = $('.assess-form-videos, .path-mod-videoassessment .assess-form-videos');
                 console.log('[VideoAssessment] getVideoContainer() found:', $container.length, 'elements');
@@ -167,12 +148,6 @@ define(['jquery', 'core/str'], function ($, str) {
                     var $videoContainer = getVideoContainer();
                     console.log('hideVideo called, container found:', $videoContainer.length);
                     if ($videoContainer.length > 0) {
-                        // Store the video container's position before hiding
-                        var offset = $videoContainer.offset();
-                        if (offset) {
-                            videoOriginalPosition = offset.top;
-                            console.log('Stored video position:', videoOriginalPosition);
-                        }
                         $videoContainer.css('display', 'none');
                         console.log('Video hidden');
                     }
@@ -187,19 +162,6 @@ define(['jquery', 'core/str'], function ($, str) {
                     if ($videoContainer.length > 0) {
                         $videoContainer.css('display', '');
                         console.log('Video shown');
-                        
-                        // Scroll back to the video's original position if we stored it
-                        if (videoOriginalPosition !== null) {
-                            console.log('Scrolling back to video position:', videoOriginalPosition);
-                            // Use smooth scroll to the stored position
-                            $('html, body').animate({
-                                scrollTop: videoOriginalPosition - 10 // Small offset for better visibility
-                            }, 300, function() {
-                                console.log('Scrolled back to video position');
-                            });
-                            // Reset the stored position
-                            videoOriginalPosition = null;
-                        }
                     }
                 }
             }
